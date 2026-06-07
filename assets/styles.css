@@ -701,10 +701,26 @@ textarea {
 .table-wrap {
   width: 100%;
   max-width: 100%;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
+  scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
+}
+
+.table-wrap::-webkit-scrollbar {
+  height: 10px;
+}
+
+.table-wrap::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #eef2f7;
+}
+
+.table-wrap::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #94a3b8;
 }
 
 table {
@@ -842,6 +858,14 @@ tr:last-child td {
 
 .wallet-balance-value {
   font-weight: 800;
+  white-space: nowrap;
+}
+
+.wallet-balance-table {
+  min-width: 860px;
+}
+
+.wallet-balance-table .mono {
   white-space: nowrap;
 }
 
@@ -1280,7 +1304,7 @@ tr:last-child td {
   }
 
   .wallet-balance-table {
-    min-width: 620px;
+    min-width: 860px;
   }
 
   .wallet-balance-table th:first-child,
