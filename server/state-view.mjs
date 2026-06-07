@@ -22,7 +22,9 @@ export function stateForUser(state, user) {
   safeState.activeTenantId = tenantId;
   safeState.activeUserId = user.id;
   safeState.tenants = safeState.tenants.filter((item) => item.id === tenantId);
-  safeState.platformPayments = [];
+  safeState.platformPayments = user.role === "supervisor"
+    ? (safeState.platformPayments || []).filter((item) => item.tenantId === tenantId).map(platformPaymentForClient)
+    : [];
   safeState.subscriptionSettings = {
     enabled: safeState.subscriptionSettings?.enabled === true,
     monthlyFee: safeState.subscriptionSettings?.monthlyFee || 0,
@@ -62,6 +64,37 @@ export function stateForUser(state, user) {
     && (user.role !== "employee" || item.userId === user.id)
   ));
   return safeState;
+}
+
+function platformPaymentForClient(payment) {
+  const {
+    id,
+    hash,
+    amount,
+    tenantId,
+    status,
+    months,
+    days,
+    reason,
+    chainTime,
+    createdAt,
+    processedAt,
+    source,
+  } = payment;
+  return {
+    id,
+    hash,
+    amount,
+    tenantId,
+    status,
+    months,
+    days,
+    reason,
+    chainTime,
+    createdAt,
+    processedAt,
+    source,
+  };
 }
 
 export function annotationForClient(annotation) {

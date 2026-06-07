@@ -355,6 +355,52 @@ button {
   word-break: break-word;
 }
 
+.subscription-overview {
+  margin-bottom: 14px;
+}
+
+.subscription-status-card {
+  display: grid;
+  gap: 10px;
+}
+
+.subscription-status-card div {
+  display: grid;
+  grid-template-columns: minmax(88px, 120px) minmax(0, 1fr);
+  gap: 4px 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.subscription-status-card div:last-child {
+  border-bottom: 0;
+}
+
+.subscription-status-card span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.subscription-status-card strong {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 850;
+  word-break: break-word;
+}
+
+.subscription-status-card em {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.subscription-history-table {
+  min-width: 840px;
+}
+
 .health {
   display: inline-flex;
   align-items: center;

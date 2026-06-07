@@ -374,8 +374,22 @@
     return `剩余 ${days} 天`;
   }
 
+  function subscriptionStatusKey(tenant) {
+    if (!tenant.subscriptionExpiresAt) return "unset";
+    return new Date(tenant.subscriptionExpiresAt).getTime() < Date.now() ? "expired" : "active";
+  }
+
+  function subscriptionStatusBadge(tenant) {
+    return badge({
+      active: ["租用有效", "green"],
+      expired: ["已到期", "red"],
+      unset: ["未设置", "orange"],
+    }, subscriptionStatusKey(tenant));
+  }
+
   function platformPaymentStatusMap() {
     return {
+      submitted: ["已提交", "amber"],
       applied: ["已自动续费", "green"],
       manual_applied: ["已手工续费", "blue"],
       offline_applied: ["线下手工续费", "blue"],
@@ -944,14 +958,25 @@
       const tenant = currentTenant();
       return `
         ${pageHead("租用续费", "查看租用状态，付款后提交交易哈希完成自动续费")}
-        <section class="grid two-col">
+        <section class="grid two-col subscription-overview">
           <div class="panel">
-            <div class="panel-title"><h3>当前租用状态</h3></div>
-            <div class="metric-list">
-              <div><span>系统名称</span><strong>${escapeHtml(tenant.name)}</strong></div>
-              <div><span>到期时间</span><strong>${formatDate(tenant.subscriptionExpiresAt)}</strong></div>
-              <div><span>系统状态</span><strong>${tenant.enabled ? "启用中" : "已停用"}</strong></div>
-              <div><span>月租费用</span><strong>${money(settings.monthlyFee)} USDT</strong></div>
+            <div class="panel-title"><h3>当前租用状态</h3>${subscriptionStatusBadge(tenant)}</div>
+            <div class="subscription-status-card">
+              <div>
+                <span>到期时间</span>
+                <strong>${formatDate(tenant.subscriptionExpiresAt)}</strong>
+                <em>${subscriptionStatusText(tenant)}</em>
+              </div>
+              <div>
+                <span>系统名称</span>
+                <strong>${escapeHtml(tenant.name)}</strong>
+                <em>${tenant.enabled ? "系统启用中" : "系统已停用"}</em>
+              </div>
+              <div>
+                <span>月租费用</span>
+                <strong>${money(settings.monthlyFee)} USDT</strong>
+                <em>${settings.enabled ? "支持提交交易哈希续费" : "暂未启用哈希续费"}</em>
+              </div>
             </div>
           </div>
           <div class="panel">
@@ -966,6 +991,10 @@
             </form>
             <p class="muted">系统会校验该哈希是否转入平台收款钱包、链上确认状态和是否重复提交，处理结果以页面提示为准。</p>
           </div>
+        </section>
+        <section class="panel">
+          <div class="panel-title"><h3>续费提交记录</h3><span>仅显示本系统记录</span></div>
+          ${renderSupervisorSubscriptionHistory()}
         </section>
       `;
     }
@@ -1036,6 +1065,26 @@
     return `<div class="table-wrap"><table>
       <thead><tr><th>链上时间</th><th>金额</th><th>状态</th><th>租户</th><th>交易哈希</th><th>说明</th><th>操作</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="7" class="empty slim">暂无平台收入记录</td></tr>`}</tbody>
+    </table></div>`;
+  }
+
+  function renderSupervisorSubscriptionHistory() {
+    const payments = (state.platformPayments || []).slice().sort((left, right) => {
+      const leftTime = left.chainTime || left.createdAt || "";
+      const rightTime = right.chainTime || right.createdAt || "";
+      return new Date(rightTime) - new Date(leftTime);
+    });
+    const rows = payments.map((payment) => `<tr>
+      <td>${formatDate(payment.chainTime || payment.createdAt)}</td>
+      <td class="amount-income">${money(payment.amount)}</td>
+      <td>${badge(platformPaymentStatusMap(), payment.status)}</td>
+      <td class="mono">${escapeHtml(shortHash(payment.hash))}</td>
+      <td>${subscriptionDurationText(payment)}</td>
+      <td>${escapeHtml(payment.reason || "-")}</td>
+    </tr>`).join("");
+    return `<div class="table-wrap"><table class="subscription-history-table">
+      <thead><tr><th>提交/链上时间</th><th>金额</th><th>处理状态</th><th>交易哈希</th><th>续费时长</th><th>说明</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="6" class="empty slim">暂无续费提交记录</td></tr>`}</tbody>
     </table></div>`;
   }
 
@@ -1282,7 +1331,8 @@
           "链上查询只是查询工具，不等同于批注或审核。",
         ])}
         ${helpSection("八、租用续费", [
-          "主管可在租用续费页面查看当前系统到期时间、系统启用状态、月租费用和平台收款钱包地址。",
+          "主管可在租用续费页面查看当前系统到期时间、剩余租用天数、系统启用状态、月租费用和平台收款钱包地址。",
+          "页面会显示本系统续费提交记录，包括交易哈希、金额、处理状态、续费时长和说明。",
           "续费时，先按页面显示的平台收款钱包完成 USDT 转账。",
           "转账完成后复制交易哈希，并在租用续费页面提交。",
           "系统会校验该哈希是否转入平台收款钱包、链上确认状态和是否重复提交。",

@@ -42,7 +42,12 @@ function fixture() {
       { id: "snap_b", tenantId: "tenant_beta", walletId: "wallet_b", dateKey: "2026-06-08", balance: 200 },
     ],
     platformPayments: [
-      { id: "pay_a", tenantId: "tenant_alpha", hash: "hash_a", amount: 100 },
+      {
+        id: "pay_a", tenantId: "tenant_alpha", hash: "hash_a", amount: 100,
+        status: "applied", months: 1, days: 0, reason: "续费 1 个月",
+        chainTime: "2026-06-08T00:00:00.000Z", createdAt: "2026-06-08T00:01:00.000Z",
+        fromAddress: "TFrom", toAddress: "TPlatform", processedBy: "sup_a",
+      },
       { id: "pay_b", tenantId: "tenant_beta", hash: "hash_b", amount: 100 },
     ],
     subscriptionSettings: {
@@ -73,7 +78,10 @@ test("supervisors only receive their tenant data", () => {
   assert.equal(view.users.some((item) => item.id === "sup_b"), false);
   assert.equal(view.users.some((item) => "passwordHash" in item), false);
   assert.equal("storageKey" in view.annotations[0].attachment, false);
-  assert.deepEqual(view.platformPayments, []);
+  assert.deepEqual(view.platformPayments.map((item) => item.id), ["pay_a"]);
+  assert.equal("fromAddress" in view.platformPayments[0], false);
+  assert.equal("toAddress" in view.platformPayments[0], false);
+  assert.equal("processedBy" in view.platformPayments[0], false);
   assert.equal(view.subscriptionSettings.monthlyFee, 100);
   assert.equal(view.subscriptionSettings.platformWalletAddress, "TPlatform");
   assert.equal(view.auditLogs.some((item) => item.id === "admin_read_log"), false);
