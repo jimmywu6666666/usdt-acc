@@ -414,16 +414,7 @@ export function updateWalletManagedFrom(state, { user, walletId, managedFrom, no
   const wallet = state.wallets.find((item) => item.id === walletId);
   if (!wallet) throw notFound("钱包不存在");
   assertSupervisor(state, user.id, wallet.tenantId);
-  const previous = wallet.managedFrom || "";
-  wallet.managedFrom = parseManagedFrom(managedFrom, now);
-  appendLog(state, {
-    tenantId: wallet.tenantId,
-    userId: user.id,
-    action: "修改钱包纳入管理时间",
-    target: `${wallet.alias}:${previous}->${wallet.managedFrom}`,
-    createdAt: now,
-  });
-  return wallet;
+  throw badRequest("钱包纳入管理起始时间创建后不可修改");
 }
 
 export function disableWallet(state, { user, walletId, now = new Date().toISOString() }) {

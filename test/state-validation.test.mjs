@@ -348,16 +348,16 @@ test("wallet management start time controls whether employees must annotate hist
   assert.equal(supervisorAnnotation.status, "pending");
 });
 
-test("supervisor can update wallet management start time with an audit log", () => {
+test("wallet management start time cannot be changed after creation", () => {
   const state = ledgerState();
-  updateWalletManagedFrom(state, {
+  assert.throws(() => updateWalletManagedFrom(state, {
     user: user(state, "sup"),
     walletId: "wallet",
     managedFrom: "2026-06-04T00:00:00.000Z",
     now: "2026-06-06T01:00:00.000Z",
-  });
-  assert.equal(state.wallets[0].managedFrom, "2026-06-04T00:00:00.000Z");
-  assert.equal(state.auditLogs[0].action, "修改钱包纳入管理时间");
+  }), /创建后不可修改/);
+  assert.equal(state.wallets[0].managedFrom, "2026-06-01T00:00:00.000Z");
+  assert.equal(state.auditLogs.length, 0);
 });
 
 test("admin creates tenants and global categories", () => {

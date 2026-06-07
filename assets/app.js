@@ -47,7 +47,6 @@
     "同步链上流水",
     "链上钱包同步失败",
     "新增钱包并设置纳入管理时间",
-    "修改钱包纳入管理时间",
     "停用钱包",
     "创建员工账号",
     "修改员工查看权限",
@@ -640,7 +639,7 @@
         <td>${wallet.enabled ? badge({ ok: ["启用", "green"] }, "ok") : badge({ off: ["停用", "red"] }, "off")}
           ${wallet.lastSyncError ? `<br><span class="sync-error">${wallet.lastSyncError}</span>` : wallet.lastSyncedAt ? `<br><span class="muted">同步：${formatDate(wallet.lastSyncedAt)}</span>` : ""}
         </td>
-        ${showActions ? `<td><button class="btn" data-wallet-managed-from="${wallet.id}">管理时间</button>${wallet.enabled ? `<button class="btn danger" data-disable-wallet="${wallet.id}">停用</button>` : `<span class="muted">已停用</span>`}</td>` : ""}
+        ${showActions ? `<td>${wallet.enabled ? `<button class="btn danger" data-disable-wallet="${wallet.id}">停用</button>` : `<span class="muted">已停用</span>`}</td>` : ""}
       </tr>`;
       }).join("")}</tbody>
     </table></div>`;
@@ -1275,7 +1274,7 @@
           "钱包不能删除，只能停用。",
           "停用钱包不影响历史流水。",
           "纳入管理起始时间之前的流水可查询，但默认不要求员工补批注。",
-          "修改钱包纳入管理时间会记录操作日志。",
+          "纳入管理起始时间创建后不可修改，避免历史流水统计口径发生变化。",
         ])}
         ${helpSection("七、链上查询", [
           "链上查询用于手动核查交易哈希或钱包地址。",
@@ -1469,7 +1468,6 @@
     document.querySelector("[data-action='sync-chain']")?.addEventListener("click", syncChain);
     document.querySelectorAll("[data-user-view-all]").forEach((input) => input.addEventListener("change", () => updateUserPermission(input.dataset.userViewAll, input.checked)));
     document.querySelectorAll("[data-disable-wallet]").forEach((button) => button.addEventListener("click", () => disableWallet(button.dataset.disableWallet)));
-    document.querySelectorAll("[data-wallet-managed-from]").forEach((button) => button.addEventListener("click", () => updateWalletManagedFrom(button.dataset.walletManagedFrom)));
     document.querySelectorAll("[data-annotate-tx]").forEach((button) => button.addEventListener("click", () => openAnnotation(button.dataset.annotateTx)));
     document.querySelectorAll("[data-resubmit]").forEach((button) => button.addEventListener("click", () => editRejected(button.dataset.resubmit)));
     document.querySelectorAll("[data-review-approve]").forEach((button) => button.addEventListener("click", () => review(button.dataset.reviewApprove, "approve")));
@@ -1862,25 +1860,6 @@
       });
       render();
       toast("钱包已新增");
-    } catch (error) {
-      toast(error.message);
-    }
-  }
-
-  async function updateWalletManagedFrom(walletId) {
-    const wallet = state.wallets.find((item) => item.id === walletId);
-    if (!wallet) return;
-    const current = new Date(wallet.managedFrom || Date.now());
-    current.setMinutes(current.getMinutes() - current.getTimezoneOffset());
-    const value = prompt("修改纳入管理起始时间（格式：YYYY-MM-DDTHH:mm）", current.toISOString().slice(0, 16));
-    if (!value) return;
-    try {
-      await apiMutate(`/api/wallets/${encodeURIComponent(walletId)}/managed-from`, {
-        method: "PATCH",
-        body: { managedFrom: new Date(value).toISOString() },
-      });
-      render();
-      toast("钱包纳入管理时间已更新");
     } catch (error) {
       toast(error.message);
     }
