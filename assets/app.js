@@ -30,7 +30,7 @@
     transfer_pending: ["内部划转待确认", "amber"],
   };
   const typeMap = { income: "进账", expense: "出账", transfer: "内部划转" };
-  const defaultLogActions = [
+  const supervisorLogActions = [
     "提交链上流水批注",
     "修改并重新提交批注",
     "标记非业务流水",
@@ -45,15 +45,28 @@
     "停用钱包",
     "创建员工账号",
     "修改员工查看权限",
+    "提交租用续费哈希",
+  ];
+  const adminLogActions = [
+    ...supervisorLogActions,
     "开通独立系统",
+    "启用独立系统",
+    "停用独立系统",
     "修改租用收费设置",
     "自动确认租用续费",
     "手工确认租用续费",
     "线下手工租用续费",
-    "提交租用续费哈希",
     "租户续费自动启用",
     "租用到期自动停用",
     "新增全局分类",
+    "修改全局分类",
+    "登录系统",
+    "登录失败",
+    "查看批注凭证",
+    "导出链上流水批注",
+    "手动查询链上流水",
+    "同步链上流水",
+    "链上钱包同步失败",
   ];
 
   const seed = {
@@ -1343,7 +1356,7 @@
         ])}
         ${helpSection("十、操作日志", [
           "操作日志用于追踪系统内的重要业务和管理操作，包括提交批注、审核通过或驳回、修正、冲正、钱包变更、权限变更和续费处理等。",
-          "主管可查看本系统业务相关日志，登录、查询、导出、同步、查看凭证等读取或工具类记录不在主管日志中展示。",
+          "主管可查看本系统业务相关日志，管理员后台动作、租用后台处理、登录、查询、导出、同步、查看凭证等记录不在主管日志中展示。",
           "员工只能查看与自己相关的日志。",
         ])}
         ${helpSection("十一、日常建议", [
@@ -1364,7 +1377,8 @@
 
   function renderLogs() {
     const tenantLogs = state.auditLogs.filter((log) => log.tenantId === visibleTenantId());
-    const actionOptions = [...new Set([...defaultLogActions, ...tenantLogs.map((log) => log.action).filter(Boolean)])].sort((a, b) => a.localeCompare(b, "zh-CN"));
+    const defaultActions = currentUser().role === "admin" ? adminLogActions : supervisorLogActions;
+    const actionOptions = [...new Set([...defaultActions, ...tenantLogs.map((log) => log.action).filter(Boolean)])].sort((a, b) => a.localeCompare(b, "zh-CN"));
     const actorIds = [...new Set(tenantLogs.map((log) => log.userId).filter(Boolean))];
     const logs = tenantLogs.filter((log) => {
       if (logFilters.from && new Date(log.createdAt).getTime() < new Date(`${logFilters.from}T00:00:00`).getTime()) return false;

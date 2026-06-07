@@ -787,7 +787,7 @@ export function getAuditLogsForUser(state, { user, tenantId }) {
   return state.auditLogs.filter((log) => {
     if (user.role === "admin") return !visibleTenantId || log.tenantId === visibleTenantId;
     if (log.tenantId !== user.tenantId) return false;
-    if (isAdminReadOnlyAuditLog(state, log)) return false;
+    if (isAdminAuditLog(state, log)) return false;
     if (isRoutineAuditLog(log)) return false;
     return user.role !== "employee" || log.userId === user.id;
   });
@@ -803,8 +803,12 @@ const adminReadOnlyAuditActions = new Set([
 ]);
 
 export function isAdminReadOnlyAuditLog(state, log) {
+  return isAdminAuditLog(state, log) && adminReadOnlyAuditActions.has(log.action);
+}
+
+export function isAdminAuditLog(state, log) {
   const actor = state.users.find((user) => user.id === log.userId);
-  return actor?.role === "admin" && adminReadOnlyAuditActions.has(log.action);
+  return actor?.role === "admin";
 }
 
 const routineAuditActions = new Set([
@@ -817,6 +821,17 @@ const routineAuditActions = new Set([
   "手动查询链上流水",
   "同步链上流水",
   "链上钱包同步失败",
+  "修改租用收费设置",
+  "自动确认租用续费",
+  "手工确认租用续费",
+  "线下手工租用续费",
+  "租户续费自动启用",
+  "租用到期自动停用",
+  "开通独立系统",
+  "启用独立系统",
+  "停用独立系统",
+  "新增全局分类",
+  "修改全局分类",
 ]);
 
 export function isRoutineAuditLog(log) {

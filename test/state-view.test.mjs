@@ -66,6 +66,8 @@ function fixture() {
       { id: "query_log", tenantId: "tenant_alpha", userId: "sup_a", action: "手动查询链上流水" },
       { id: "admin_read_log", tenantId: "tenant_alpha", userId: "admin", action: "查看批注凭证" },
       { id: "admin_write_log", tenantId: "tenant_alpha", userId: "admin", action: "标记非业务流水" },
+      { id: "admin_subscription_log", tenantId: "tenant_alpha", userId: "admin", action: "修改租用收费设置" },
+      { id: "auto_subscription_log", tenantId: "tenant_alpha", userId: "sup_a", action: "自动确认租用续费" },
       { id: "beta_log", tenantId: "tenant_beta", userId: "sup_b" },
     ],
   };
@@ -91,7 +93,9 @@ test("supervisors only receive their tenant data", () => {
   assert.equal(view.auditLogs.some((item) => item.id === "login_log"), false);
   assert.equal(view.auditLogs.some((item) => item.id === "sync_log"), false);
   assert.equal(view.auditLogs.some((item) => item.id === "query_log"), false);
-  assert.equal(view.auditLogs.some((item) => item.id === "admin_write_log"), true);
+  assert.equal(view.auditLogs.some((item) => item.id === "admin_write_log"), false);
+  assert.equal(view.auditLogs.some((item) => item.id === "admin_subscription_log"), false);
+  assert.equal(view.auditLogs.some((item) => item.id === "auto_subscription_log"), false);
 });
 
 test("limited employees receive unannotated work and their own records only", () => {

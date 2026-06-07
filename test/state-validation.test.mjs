@@ -264,12 +264,14 @@ test("supervisor cannot see admin read-only audit logs", () => {
       { id: "supervisor_query", tenantId: "tenant_alpha", userId: "sup", action: "手动查询链上流水", createdAt: "2026-06-07T00:00:00.000Z" },
       { id: "supervisor_sync", tenantId: "tenant_alpha", userId: "sup", action: "同步链上流水", createdAt: "2026-06-07T00:00:00.000Z" },
       { id: "supervisor_failure", tenantId: "tenant_alpha", userId: "sup", action: "链上钱包同步失败", createdAt: "2026-06-07T00:00:00.000Z" },
+      { id: "supervisor_auto_renew", tenantId: "tenant_alpha", userId: "sup", action: "自动确认租用续费", createdAt: "2026-06-07T00:00:00.000Z" },
       { id: "admin_write", tenantId: "tenant_alpha", userId: "admin", action: "标记非业务流水", createdAt: "2026-06-07T00:00:00.000Z" },
+      { id: "admin_subscription", tenantId: "tenant_alpha", userId: "admin", action: "修改租用收费设置", createdAt: "2026-06-07T00:00:00.000Z" },
       { id: "employee_write", tenantId: "tenant_alpha", userId: "emp", action: "提交链上流水批注", createdAt: "2026-06-07T00:00:00.000Z" },
     ],
   });
   const supervisorLogs = getAuditLogsForUser(state, { user: user(state, "sup"), tenantId: "tenant_alpha" });
-  assert.deepEqual(supervisorLogs.map((log) => log.id), ["admin_write", "employee_write"]);
+  assert.deepEqual(supervisorLogs.map((log) => log.id), ["employee_write"]);
 
   const adminLogs = getAuditLogsForUser(state, { user: user(state, "admin"), tenantId: "tenant_alpha" });
   assert.deepEqual(adminLogs.map((log) => log.id), [
@@ -279,7 +281,9 @@ test("supervisor cannot see admin read-only audit logs", () => {
     "supervisor_query",
     "supervisor_sync",
     "supervisor_failure",
+    "supervisor_auto_renew",
     "admin_write",
+    "admin_subscription",
     "employee_write",
   ]);
 });
