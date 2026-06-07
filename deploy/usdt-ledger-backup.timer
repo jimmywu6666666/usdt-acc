@@ -1,0 +1,10 @@
+[Unit]
+Description=USDT Ledger database and attachment backup every 6 hours
+
+[Timer]
+OnCalendar=*-*-* 00,06,12,18:15:00 UTC
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target

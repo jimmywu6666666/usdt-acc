@@ -1,0 +1,86 @@
+import { publicUser } from "./auth.mjs";
+import { isAdminReadOnlyAuditLog } from "./domain.mjs";
+
+export function stateForUser(state, user) {
+  const safeState = structuredClone(state);
+  safeState.activeView = "dashboard";
+  safeState.editingAnnotationId = null;
+  safeState.users = safeState.users.map(publicUser);
+  safeState.annotations = safeState.annotations.map(annotationForClient);
+
+  if (user.role === "admin") {
+    safeState.activeUserId = user.id;
+    return safeState;
+  }
+
+  const tenantId = user.tenantId;
+  const tenantUsers = safeState.users.filter((item) => (
+    item.tenantId === tenantId
+    && (user.role !== "employee" || user.canViewAll || item.id === user.id || item.role === "supervisor")
+  ));
+  const administrators = safeState.users.filter((item) => item.role === "admin");
+  safeState.activeTenantId = tenantId;
+  safeState.activeUserId = user.id;
+  safeState.tenants = safeState.tenants.filter((item) => item.id === tenantId);
+  safeState.platformPayments = [];
+  safeState.subscriptionSettings = {
+    enabled: safeState.subscriptionSettings?.enabled === true,
+    monthlyFee: safeState.subscriptionSettings?.monthlyFee || 0,
+    platformWalletAddress: safeState.subscriptionSettings?.platformWalletAddress || "",
+    autoDisable: safeState.subscriptionSettings?.autoDisable !== false,
+  };
+  safeState.users = [...administrators, ...tenantUsers];
+  safeState.wallets = safeState.wallets.filter((item) => item.tenantId === tenantId);
+  safeState.walletBalanceSnapshots = (safeState.walletBalanceSnapshots || []).filter((item) => item.tenantId === tenantId);
+  safeState.entries = (safeState.entries || []).filter((item) => item.tenantId === tenantId);
+  safeState.legacyEntries = (safeState.legacyEntries || []).filter((item) => item.tenantId === tenantId);
+
+  if (user.role === "employee" && !user.canViewAll) {
+    const ownAnnotations = safeState.annotations.filter((item) => (
+      item.tenantId === tenantId && item.annotatedBy === user.id
+    ));
+    const ownAnnotationIds = new Set(ownAnnotations.map((item) => item.id));
+    safeState.chainTransactions = safeState.chainTransactions.filter((tx) => (
+      tx.tenantId === tenantId
+      && (ownAnnotationIds.has(tx.currentAnnotationId) || (!tx.currentAnnotationId && isManagedForView(safeState, tx)))
+    ));
+    const visibleTransactionIds = new Set(safeState.chainTransactions.map((item) => item.id));
+    safeState.annotations = ownAnnotations.filter((item) => (
+      visibleTransactionIds.has(item.chainTxId)
+      || item.linkedChainTxIds?.some((id) => visibleTransactionIds.has(id))
+    ));
+    safeState.entries = safeState.entries.filter((item) => item.submittedBy === user.id);
+    safeState.legacyEntries = safeState.legacyEntries.filter((item) => item.submittedBy === user.id);
+  } else {
+    safeState.chainTransactions = safeState.chainTransactions.filter((item) => item.tenantId === tenantId);
+    safeState.annotations = safeState.annotations.filter((item) => item.tenantId === tenantId);
+  }
+
+  safeState.auditLogs = safeState.auditLogs.filter((item) => (
+    item.tenantId === tenantId
+    && !isAdminReadOnlyAuditLog(safeState, item)
+    && (user.role !== "employee" || item.userId === user.id)
+  ));
+  return safeState;
+}
+
+export function annotationForClient(annotation) {
+  if (!annotation.attachment) return annotation;
+  const { name, originalName, mimeType, byteSize, originalByteSize, compressed } = annotation.attachment;
+  return {
+    ...annotation,
+    attachment: { name, originalName, mimeType, byteSize, originalByteSize, compressed },
+  };
+}
+
+function isManagedForView(state, tx) {
+  const linkedTransactions = [tx];
+  if (tx.pairedTxId) {
+    const paired = state.chainTransactions.find((item) => item.id === tx.pairedTxId);
+    if (paired) linkedTransactions.push(paired);
+  }
+  return linkedTransactions.some((item) => {
+    const wallet = state.wallets.find((candidate) => candidate.id === item.walletId);
+    return !wallet?.managedFrom || new Date(item.chainTime).getTime() >= new Date(wallet.managedFrom).getTime();
+  });
+}

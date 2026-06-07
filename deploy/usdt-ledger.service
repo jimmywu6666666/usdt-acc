@@ -1,0 +1,26 @@
+[Unit]
+Description=USDT Financial Ledger
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=ledgerapp
+Group=ledgerapp
+WorkingDirectory=/opt/usdt-ledger
+ExecStart=/usr/bin/node server/index.mjs
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/usdt-ledger/data /var/lib/usdt-ledger/attachments
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,20 @@
+#!/bin/bash
+set -euo pipefail
+
+BACKUP_DIR=/var/lib/usdt-ledger/backups
+ATTACHMENT_DIR=/var/lib/usdt-ledger/attachments
+STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+
+install -d -o ledgerapp -g ledgerapp -m 750 "$BACKUP_DIR"
+cd /
+sudo -u postgres pg_dump --format=custom usdt_ledger > "$BACKUP_DIR/usdt_ledger-$STAMP.dump"
+tar -C "$ATTACHMENT_DIR" -czf "$BACKUP_DIR/usdt_ledger-attachments-$STAMP.tar.gz" .
+chown ledgerapp:ledgerapp "$BACKUP_DIR/usdt_ledger-$STAMP.dump" "$BACKUP_DIR/usdt_ledger-attachments-$STAMP.tar.gz"
+chmod 640 "$BACKUP_DIR/usdt_ledger-$STAMP.dump" "$BACKUP_DIR/usdt_ledger-attachments-$STAMP.tar.gz"
+(
+  cd "$BACKUP_DIR"
+  sha256sum "usdt_ledger-$STAMP.dump" "usdt_ledger-attachments-$STAMP.tar.gz" > "usdt_ledger-$STAMP.sha256"
+)
+chown ledgerapp:ledgerapp "$BACKUP_DIR/usdt_ledger-$STAMP.sha256"
+chmod 640 "$BACKUP_DIR/usdt_ledger-$STAMP.sha256"
+find "$BACKUP_DIR" -type f \( -name 'usdt_ledger-*.dump' -o -name 'usdt_ledger-attachments-*.tar.gz' -o -name 'usdt_ledger-*.sha256' \) -mtime +14 -delete

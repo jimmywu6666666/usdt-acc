@@ -1,0 +1,10 @@
+data/state.json
+data/sessions.json
+data/attachments/
+.env
+.env.remote
+.production-accounts.txt
+.server-root-password.txt
+.DS_Store
+node_modules/
+*.log

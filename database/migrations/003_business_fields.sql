@@ -1,0 +1,7 @@
+ALTER TABLE wallets
+  ADD COLUMN IF NOT EXISTS disabled_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS disabled_by TEXT REFERENCES users(id);
+
+ALTER TABLE ledger_entries
+  ADD COLUMN IF NOT EXISTS corrected_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS corrected_by TEXT REFERENCES users(id);
