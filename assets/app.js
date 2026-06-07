@@ -919,9 +919,9 @@
     const canManage = currentUser().role === "supervisor";
     return `
       ${pageHead("账号管理", "主管创建员工账号，并设置员工是否可查看全部账目")}
-      ${canManage ? `<section class="grid two-col">
-        <div class="panel"><div class="panel-title"><h3>新增员工</h3></div>
-          <form id="userForm" class="form-grid one">
+      ${canManage ? `<section class="user-management-layout">
+        <div class="panel user-create-panel"><div class="panel-title"><h3>新增员工</h3></div>
+          <form id="userForm" class="form-grid one compact-form">
             <label>员工姓名<input name="name" required></label>
             <label class="checkline"><input name="canViewAll" type="checkbox" checked> 查看全部账目(取消勾选则只可以查看员工自己提交的账目)</label>
             <div class="actions"><button class="btn primary" type="submit">创建员工</button></div>
@@ -932,7 +932,7 @@
   }
 
   function renderUserTable() {
-    return `<div class="panel-title"><h3>账号列表</h3></div><div class="table-wrap"><table>
+    return `<div class="panel-title"><h3>账号列表</h3></div><div class="table-wrap user-table-wrap"><table class="user-table">
       <thead><tr><th>姓名</th><th>角色</th><th>查看全部账目</th>${canReview() ? "<th>操作</th>" : ""}</tr></thead>
       <tbody>${tenantUsers().map((user) => `<tr><td>${user.name}</td><td>${roleLabel(user.role)}</td><td>${user.canViewAll ? "是" : "否"}</td>${canReview() ? `<td>${user.role === "employee" ? `<label class="checkline compact"><input type="checkbox" data-user-view-all="${user.id}" ${user.canViewAll ? "checked" : ""}> 允许查看全部</label>` : "-"}</td>` : ""}</tr>`).join("")}</tbody>
     </table></div>`;
