@@ -1,5 +1,5 @@
 import { publicUser } from "./auth.mjs";
-import { isAdminReadOnlyAuditLog } from "./domain.mjs";
+import { isAdminReadOnlyAuditLog, isRoutineAuditLog } from "./domain.mjs";
 
 export function stateForUser(state, user) {
   const safeState = structuredClone(state);
@@ -61,6 +61,7 @@ export function stateForUser(state, user) {
   safeState.auditLogs = safeState.auditLogs.filter((item) => (
     item.tenantId === tenantId
     && !isAdminReadOnlyAuditLog(safeState, item)
+    && !isRoutineAuditLog(item)
     && (user.role !== "employee" || item.userId === user.id)
   ));
   return safeState;

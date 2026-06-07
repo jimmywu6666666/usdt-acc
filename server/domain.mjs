@@ -788,6 +788,7 @@ export function getAuditLogsForUser(state, { user, tenantId }) {
     if (user.role === "admin") return !visibleTenantId || log.tenantId === visibleTenantId;
     if (log.tenantId !== user.tenantId) return false;
     if (isAdminReadOnlyAuditLog(state, log)) return false;
+    if (isRoutineAuditLog(log)) return false;
     return user.role !== "employee" || log.userId === user.id;
   });
 }
@@ -804,6 +805,22 @@ const adminReadOnlyAuditActions = new Set([
 export function isAdminReadOnlyAuditLog(state, log) {
   const actor = state.users.find((user) => user.id === log.userId);
   return actor?.role === "admin" && adminReadOnlyAuditActions.has(log.action);
+}
+
+const routineAuditActions = new Set([
+  "登录系统",
+  "登录失败",
+  "查看批注凭证",
+  "下载批注附件",
+  "导出链上流水批注",
+  "导出账目",
+  "手动查询链上流水",
+  "同步链上流水",
+  "链上钱包同步失败",
+]);
+
+export function isRoutineAuditLog(log) {
+  return routineAuditActions.has(log?.action);
 }
 
 export function assertSupervisor(state, userId, tenantId) {

@@ -61,6 +61,9 @@ function fixture() {
     auditLogs: [
       { id: "own_log", tenantId: "tenant_alpha", userId: "emp_a" },
       { id: "other_log", tenantId: "tenant_alpha", userId: "emp_b" },
+      { id: "login_log", tenantId: "tenant_alpha", userId: "sup_a", action: "登录系统" },
+      { id: "sync_log", tenantId: "tenant_alpha", userId: "sup_a", action: "同步链上流水" },
+      { id: "query_log", tenantId: "tenant_alpha", userId: "sup_a", action: "手动查询链上流水" },
       { id: "admin_read_log", tenantId: "tenant_alpha", userId: "admin", action: "查看批注凭证" },
       { id: "admin_write_log", tenantId: "tenant_alpha", userId: "admin", action: "标记非业务流水" },
       { id: "beta_log", tenantId: "tenant_beta", userId: "sup_b" },
@@ -85,6 +88,9 @@ test("supervisors only receive their tenant data", () => {
   assert.equal(view.subscriptionSettings.monthlyFee, 100);
   assert.equal(view.subscriptionSettings.platformWalletAddress, "TPlatform");
   assert.equal(view.auditLogs.some((item) => item.id === "admin_read_log"), false);
+  assert.equal(view.auditLogs.some((item) => item.id === "login_log"), false);
+  assert.equal(view.auditLogs.some((item) => item.id === "sync_log"), false);
+  assert.equal(view.auditLogs.some((item) => item.id === "query_log"), false);
   assert.equal(view.auditLogs.some((item) => item.id === "admin_write_log"), true);
 });
 
