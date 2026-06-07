@@ -877,7 +877,7 @@
   }
 
   function renderWallets() {
-    const walletList = `<div class="panel"><div class="panel-title"><h3>钱包列表</h3></div>${renderWalletBalanceTable()}</div>`;
+    const walletList = `<div class="panel wallet-list-panel"><div class="panel-title"><h3>钱包列表</h3></div>${renderWalletBalanceTable()}</div>`;
     const statusNotice = renderChainStatusNotice();
     const syncAction = canViewReviewCenter() ? `<button class="btn primary" data-action="sync-chain">立即同步</button>` : "";
     if (!canReview()) {
@@ -887,7 +887,7 @@
       ${pageHead("钱包管理", "维护本系统钱包、链上余额和同步状态，停用钱包不会影响历史流水", syncAction)}
       ${statusNotice}
       <section class="grid two-col">
-        <div class="panel">
+        <div class="panel wallet-create-panel">
           <div class="panel-title"><h3>新增钱包</h3></div>
           <form id="walletForm" class="form-grid one">
             <label>钱包别名<input name="alias" required></label>

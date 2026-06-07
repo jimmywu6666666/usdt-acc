@@ -68,6 +68,10 @@ button {
   min-width: 240px;
 }
 
+.brand > div {
+  min-width: 0;
+}
+
 .brand-mark {
   display: grid;
   width: 38px;
@@ -1283,6 +1287,8 @@ tr:last-child td {
 
   .brand h1 {
     font-size: 16px;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -1400,6 +1406,14 @@ tr:last-child td {
   .filters,
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .wallet-list-panel {
+    order: 1;
+  }
+
+  .wallet-create-panel {
+    order: 2;
   }
 
   .stats,
