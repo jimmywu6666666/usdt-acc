@@ -961,11 +961,34 @@ tr:last-child td {
 }
 
 .wallet-balance-table {
-  min-width: 860px;
+  min-width: 720px;
 }
 
 .wallet-balance-table .mono {
   white-space: nowrap;
+}
+
+.wallet-cell-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wallet-cell-head strong {
+  font-weight: 850;
+}
+
+.wallet-cell-meta,
+.wallet-cell-sync {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.wallet-cell-actions {
+  margin-top: 8px;
 }
 
 .balance-change {
@@ -1429,17 +1452,17 @@ tr:last-child td {
   }
 
   .wallet-balance-table {
-    min-width: 860px;
+    min-width: 680px;
   }
 
   .wallet-balance-table th:first-child,
   .wallet-balance-table td:first-child {
-    width: 120px;
+    width: 210px;
   }
 
   .wallet-balance-table th:nth-child(2),
   .wallet-balance-table td:nth-child(2) {
-    width: 120px;
+    width: 150px;
   }
 
   th,

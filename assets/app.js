@@ -652,16 +652,21 @@
     if (!wallets.length) return `<div class="empty">暂无钱包</div>`;
     const showActions = state.activeView === "wallets" && canReview();
     return `<div class="table-wrap wallet-balance-wrap"><table class="wallet-balance-table">
-      <thead><tr><th>钱包</th><th>链上余额</th><th>地址</th><th>状态</th>${showActions ? "<th>操作</th>" : ""}</tr></thead>
+      <thead><tr><th>钱包 / 状态</th><th>链上余额</th><th>地址</th></tr></thead>
       <tbody>${wallets.map((wallet) => {
         const summary = walletBalanceSummary(wallet);
+        const status = wallet.enabled ? badge({ ok: ["启用", "green"] }, "ok") : badge({ off: ["停用", "red"] }, "off");
+        const syncText = wallet.lastSyncError
+          ? `<span class="sync-error">${escapeHtml(wallet.lastSyncError)}</span>`
+          : wallet.lastSyncedAt ? `<span class="muted">同步：${formatDate(wallet.lastSyncedAt)}</span>` : "";
         return `<tr>
-        <td>${wallet.alias}<br><span class="muted">${wallet.chain}</span><br><span class="muted">管理起点：${formatDate(wallet.managedFrom)}</span></td>
-        <td class="wallet-balance-value">${money(summary.current)}<br>${balanceChangeLine("今日变化", summary.todayChange)}<br>${balanceChangeLine("本月变化", summary.monthChange)}</td><td class="mono">${wallet.address}</td>
-        <td>${wallet.enabled ? badge({ ok: ["启用", "green"] }, "ok") : badge({ off: ["停用", "red"] }, "off")}
-          ${wallet.lastSyncError ? `<br><span class="sync-error">${wallet.lastSyncError}</span>` : wallet.lastSyncedAt ? `<br><span class="muted">同步：${formatDate(wallet.lastSyncedAt)}</span>` : ""}
+        <td>
+          <div class="wallet-cell-head"><strong>${escapeHtml(wallet.alias)}</strong>${status}</div>
+          <div class="wallet-cell-meta">${escapeHtml(wallet.chain)} · 管理起点：${formatDate(wallet.managedFrom)}</div>
+          ${syncText ? `<div class="wallet-cell-sync">${syncText}</div>` : ""}
+          ${showActions ? `<div class="wallet-cell-actions">${wallet.enabled ? `<button class="btn small danger" data-disable-wallet="${wallet.id}">停用</button>` : `<span class="muted">已停用</span>`}</div>` : ""}
         </td>
-        ${showActions ? `<td>${wallet.enabled ? `<button class="btn danger" data-disable-wallet="${wallet.id}">停用</button>` : `<span class="muted">已停用</span>`}</td>` : ""}
+        <td class="wallet-balance-value">${money(summary.current)}<br>${balanceChangeLine("今日变化", summary.todayChange)}<br>${balanceChangeLine("本月变化", summary.monthChange)}</td><td class="mono">${escapeHtml(wallet.address)}</td>
       </tr>`;
       }).join("")}</tbody>
     </table></div>`;
