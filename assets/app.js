@@ -858,9 +858,9 @@
         <div class="review-card-head"><strong>${directionPill(direction)} <span class="amount-${direction}">${money(tx.amount)} USDT</span></strong><span class="review-status-group">${annotation.correctionType ? `<span class="badge blue">${specialReview}</span>` : ""}${badge(statusMap, "pending")}</span></div>
         <dl>
           <div><dt>链上时间</dt><dd>${formatDate(tx.chainTime)}</dd></div>
-          <div><dt>钱包</dt><dd>${transactionWalletText(tx)}</dd></div>
+          <div><dt>钱包</dt><dd><span class="review-meta-tag wallet">${escapeHtml(transactionWalletText(tx))}</span></dd></div>
           <div><dt>对方地址</dt><dd class="mono">${tx.counterparty || "-"}</dd></div>
-          <div><dt>批注人</dt><dd>${userName(annotation.annotatedBy)}</dd></div>
+          <div><dt>批注人</dt><dd><span class="review-meta-tag annotator">${escapeHtml(userName(annotation.annotatedBy))}</span></dd></div>
           <div><dt>业务说明</dt><dd>${annotation.category} · ${annotation.note}</dd></div>
           ${annotation.rejectionReason ? `<div class="wide"><dt>驳回原因</dt><dd><div class="inline-alert danger">${escapeHtml(annotation.rejectionReason)}</div></dd></div>` : ""}
           <div><dt>凭证</dt><dd>${annotation.attachmentName ? `<button class="attachment-link" data-attachment="${annotation.id}">${annotation.attachmentName}</button>` : "无凭证"}</dd></div>

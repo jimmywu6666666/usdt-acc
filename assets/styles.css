@@ -1148,6 +1148,30 @@ tr:last-child td {
   word-break: break-word;
 }
 
+.review-meta-tag {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 26px;
+  padding: 3px 9px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.review-meta-tag.wallet {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.review-meta-tag.annotator {
+  border-color: #ddd6fe;
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
 @media (max-width: 1040px) {
   .layout {
     grid-template-columns: 1fr;
