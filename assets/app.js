@@ -1392,12 +1392,11 @@
 
   function renderWallets() {
     const walletList = `<div class="panel wallet-list-panel"><div class="panel-title"><h3>钱包列表</h3></div>${renderWalletBalanceTable()}</div>`;
-    const statusNotice = renderChainStatusNotice();
-    const limitNotice = renderWalletLimitNotice();
+    const walletStatusNotice = renderWalletStatusNotice();
     const businessActive = tenantBusinessActive();
     const syncAction = canViewReviewCenter() && businessActive ? `<button class="btn primary" data-action="sync-chain">立即同步</button>` : "";
     if (!canReview()) {
-      return `${pageHead("钱包管理", "查看本系统钱包、链上余额和同步状态，历史流水会永久保留", syncAction)}${renderTenantBusinessLockNotice()}${statusNotice}${limitNotice}${walletList}`;
+      return `${pageHead("钱包管理", "查看本系统钱包、链上余额和同步状态，历史流水会永久保留", syncAction)}${renderTenantBusinessLockNotice()}${walletStatusNotice}${walletList}`;
     }
     const createWalletPanel = businessActive ? `<div class="panel wallet-create-panel">
       <div class="panel-title"><h3>新增钱包</h3></div>
@@ -1421,8 +1420,7 @@
     return `
       ${pageHead("钱包管理", "维护本系统钱包、链上余额和同步状态，停用钱包不会影响历史流水", syncAction)}
       ${renderTenantBusinessLockNotice()}
-      ${statusNotice}
-      ${limitNotice}
+      ${walletStatusNotice}
       <section class="grid two-col">
         ${createWalletPanel}
         ${walletList}
@@ -1430,12 +1428,17 @@
     `;
   }
 
-  function renderWalletLimitNotice() {
+  function renderWalletStatusNotice() {
+    const limitInfo = walletLimitInfo();
+    return renderChainStatusNotice(limitInfo.text, { warning: limitInfo.reached });
+  }
+
+  function walletLimitInfo() {
     const limit = Number(state.systemSettings?.walletEnabledLimit || 0);
-    if (!limit) return "";
+    if (!limit) return { text: "", reached: false };
     const enabledCount = tenantWallets().filter((wallet) => wallet.enabled).length;
     const limitReached = enabledCount >= limit;
-    return `<div class="notice ${limitReached ? "chain-status-off" : "chain-status-ok"}">钱包启用限制：当前已启用 ${enabledCount} / ${limit} 个。${limitReached ? "已达到上限，不能新增或启用钱包。" : "未达到上限。"}</div>`;
+    return { text: ` · 已启用 ${enabledCount}/${limit} 个${limitReached ? " · 已达上限" : ""}`, reached: limitReached };
   }
 
   function renderChain() {
@@ -1451,11 +1454,11 @@
     `;
   }
 
-  function renderChainStatusNotice() {
+  function renderChainStatusNotice(extraText = "", { warning = false } = {}) {
     const chainStatus = state.chainStatus;
     if (!chainStatus) return "";
     return chainStatus.configured
-      ? `<div class="notice chain-status-ok">钱包链上同步已启用 · ${chainStatus.walletCount} 个钱包${latestChainSyncText(chainStatus)}${chainSchedulerText(chainStatus.scheduler)}</div>`
+      ? `<div class="notice ${warning ? "chain-status-off" : "chain-status-ok"}">钱包链上同步已启用 · ${chainStatus.walletCount} 个钱包${latestChainSyncText(chainStatus)}${chainSchedulerText(chainStatus.scheduler)}${extraText}</div>`
       : `<div class="notice chain-status-off">钱包链上同步未启用：${chainStatus.reason || "未配置 TRON_API_KEY"}。配置后可自动同步钱包流水。</div>`;
   }
 
