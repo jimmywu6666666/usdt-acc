@@ -753,8 +753,8 @@
     ];
     if (["admin", "supervisor"].includes(role)) nav.splice(2, 0, ["review", "审核中心"]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["users", "账号管理"]);
-    if (role === "admin") nav.splice(-1, 0, ["admin", "系统管理"]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["subscription", role === "admin" ? "租用管理" : "租用续费"]);
+    if (role === "admin") nav.splice(-1, 0, ["admin", "系统管理"]);
     if (role === "admin") nav.splice(-1, 0, ["server", "服务器管理"]);
     nav.splice(-1, 0, ["profile", "我的账号"]);
     nav.splice(-1, 0, ["help", "使用说明"]);
