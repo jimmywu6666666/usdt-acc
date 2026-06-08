@@ -2088,7 +2088,7 @@
 
   function renderTicketStatusActions(ticket) {
     if (ticket.status === "closed") {
-      return `<button class="btn" type="button" data-ticket-status="${currentUser().role === "admin" ? "waiting_tenant" : "waiting_admin"}">重新打开</button>`;
+      return "";
     }
     if (currentUser().role !== "admin") {
       return `<button class="btn danger" type="button" data-ticket-status="closed">关闭工单</button>`;
@@ -2435,7 +2435,7 @@
           "提交工单时建议写清楚问题发生时间、涉及的钱包或交易哈希、已经尝试过的处理方式，以及希望平台协助确认或处理的事项。",
           "如有错误页面、链上截图或转账凭证，可上传图片附件，也可以直接粘贴截图。",
           "待平台回复表示平台需要查看或处理；待租户回复表示需要主管补充信息或确认；处理中表示问题正在跟进；已关闭表示问题已经处理完成。",
-          "待租户回复超过 3 天未回复时，工单列表会显示提醒；第 4 天仍未回复会自动关闭，关闭后仍可重新打开。",
+          "待租户回复超过 3 天未回复时，工单列表会显示提醒；第 4 天仍未回复会自动关闭，关闭后可通过回复自动重新打开。",
           "已关闭工单仍可继续回复，提交回复后会自动重新打开并转为待对方回复。",
         ])}
         ${helpSection("十一、链上查询", [
