@@ -188,6 +188,7 @@
   let autoRefreshInFlight = false;
   let appVersionTimer = null;
   let currentAppVersion = "";
+  let pendingScrollTarget = null;
   let appUpdateAvailable = false;
   const ENTRY_PAGE_SIZE = 30;
   const LOG_PAGE_SIZE = 30;
@@ -629,6 +630,7 @@
     `;
     saveUiState();
     bindEvents();
+    scrollToPendingTarget();
   }
 
   function renderLogin() {
@@ -732,12 +734,12 @@
       <div class="section-label"><h3>待处理业务</h3><span>需要补充说明或主管确认的流水</span></div>
       <section class="dashboard-business-block">
         <div class="pending-business-row">
-          <div class="pending-business-card review">
+          <div class="pending-business-card review" role="button" tabindex="0" data-dashboard-target="review-annotations">
             <span>待审核批注</span>
             <strong>${pending}</strong>
             <small>主管确认业务原由与凭证</small>
           </div>
-          <div class="pending-business-card annotation">
+          <div class="pending-business-card annotation" role="button" tabindex="0" data-dashboard-target="new-annotation">
             <span>待批注流水</span>
             <strong>${unannotated}</strong>
             <small>链上已有记录但尚无业务说明</small>
@@ -763,12 +765,12 @@
       <div class="section-label"><h3>往来款概况</h3><span>只统计已审核且未作废的往来款</span></div>
       <section class="dashboard-business-block rp-overview">
         <div class="rp-pending-row">
-          <div class="rp-pending-card pending">
+          <div class="rp-pending-card pending" role="button" tabindex="0" data-dashboard-target="review-receivables">
             <span>待审核往来款</span>
             <strong>${pendingReceivables}</strong>
             <small>员工提交的应收应付待确认</small>
           </div>
-          <div class="rp-pending-card pending">
+          <div class="rp-pending-card pending" role="button" tabindex="0" data-dashboard-target="review-settlements">
             <span>待审核平账</span>
             <strong>${pendingSettlements}</strong>
             <small>往来款绑定链上流水待确认</small>
@@ -1075,9 +1077,9 @@
     return `
       ${pageHead("审核中心", canReview() ? "审核批注、往来款和平账申请，确认业务说明、凭证和链上金额是否一致" : "查看当前系统待审核事项，便于排查和跟进")}
       ${canViewReviewCenter() ? `
-        <section class="review-section"><div class="section-label"><h3>批注待审核</h3><span>${pending.length} 条</span></div>${renderReviewCards(pending, canReview())}</section>
-        <section class="review-section"><div class="section-label"><h3>往来款待审核</h3><span>${pendingReceivables.length} 条</span></div>${renderReceivableReviewCards(pendingReceivables, canReview())}</section>
-        <section class="review-section"><div class="section-label"><h3>平账待审核</h3><span>${pendingSettlements.length} 条</span></div>${renderSettlementReviewCards(pendingSettlements, canReview())}</section>
+        <section class="review-section" data-review-section="annotations"><div class="section-label"><h3>批注待审核</h3><span>${pending.length} 条</span></div>${renderReviewCards(pending, canReview())}</section>
+        <section class="review-section" data-review-section="receivables"><div class="section-label"><h3>往来款待审核</h3><span>${pendingReceivables.length} 条</span></div>${renderReceivableReviewCards(pendingReceivables, canReview())}</section>
+        <section class="review-section" data-review-section="settlements"><div class="section-label"><h3>平账待审核</h3><span>${pendingSettlements.length} 条</span></div>${renderSettlementReviewCards(pendingSettlements, canReview())}</section>
       ` : `<div class="panel empty">当前账号没有审核权限</div>`}
     `;
   }
@@ -1950,6 +1952,15 @@
       else if (state.activeView === "server") refreshServerMetrics().then(render);
       else render();
     }));
+    document.querySelectorAll("[data-dashboard-target]").forEach((card) => {
+      const openTarget = () => openDashboardTarget(card.dataset.dashboardTarget);
+      card.addEventListener("click", openTarget);
+      card.addEventListener("keydown", (event) => {
+        if (!["Enter", " "].includes(event.key)) return;
+        event.preventDefault();
+        openTarget();
+      });
+    });
     document.querySelector("[data-action='tenant']")?.addEventListener("change", (event) => {
       state.activeTenantId = event.target.value;
       entryFilters = defaultEntryFilters();
@@ -2065,6 +2076,36 @@
     document.querySelectorAll("[data-detail]").forEach((button) => button.addEventListener("click", () => showDetail(button.dataset.detail)));
     document.querySelectorAll("[data-attachment]").forEach((button) => button.addEventListener("click", () => previewAttachment(button.dataset.attachment)));
     bindProofUpload();
+  }
+
+  function openDashboardTarget(target) {
+    const reviewTargets = {
+      "review-annotations": "[data-review-section='annotations']",
+      "review-receivables": "[data-review-section='receivables']",
+      "review-settlements": "[data-review-section='settlements']",
+    };
+    if (target === "new-annotation") {
+      state.activeView = "new";
+      state.editingAnnotationId = null;
+      render();
+      return;
+    }
+    if (reviewTargets[target]) {
+      state.activeView = "review";
+      state.editingAnnotationId = null;
+      pendingScrollTarget = reviewTargets[target];
+      render();
+    }
+  }
+
+  function scrollToPendingTarget() {
+    if (!pendingScrollTarget) return;
+    const selector = pendingScrollTarget;
+    pendingScrollTarget = null;
+    requestAnimationFrame(() => {
+      const target = document.querySelector(selector);
+      target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   function bindProofUpload(root = document) {

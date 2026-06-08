@@ -320,6 +320,24 @@ button {
   background: var(--panel-soft);
 }
 
+.pending-business-card[role="button"],
+.rp-pending-card[role="button"] {
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.pending-business-card[role="button"]:hover,
+.rp-pending-card[role="button"]:hover {
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.pending-business-card[role="button"]:focus-visible,
+.rp-pending-card[role="button"]:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.22);
+  outline-offset: 2px;
+}
+
 .pending-business-card.review {
   border-color: #f1d6a7;
   background: #fffaf0;
