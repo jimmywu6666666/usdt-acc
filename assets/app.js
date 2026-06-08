@@ -744,13 +744,25 @@
       <section class="grid status-stats">
         <div class="card"><div class="card-label">待审核批注</div><div class="card-value">${pending}</div><div class="card-foot">主管确认业务原由与凭证</div></div>
         <div class="card"><div class="card-label">待批注流水</div><div class="card-value">${unannotated}</div><div class="card-foot">链上已有记录但尚无业务说明</div></div>
-        <div class="card"><div class="card-label">待审核往来款</div><div class="card-value">${pendingReceivables}</div><div class="card-foot">员工提交的应收应付待确认</div></div>
-        <div class="card"><div class="card-label">待审核平账</div><div class="card-value">${pendingSettlements}</div><div class="card-foot">往来款绑定链上流水待确认</div></div>
       </section>
       <div class="section-label"><h3>往来款概况</h3><span>只统计已审核且未作废的往来款</span></div>
-      <section class="stats-grid rp-stats">
-        ${renderRpStat("应收总额", receivableSummary.receivable.amount, "应收已收", receivableSummary.receivable.settled, "未收", receivableSummary.receivable.remaining, "多收", receivableSummary.receivable.over)}
-        ${renderRpStat("应付总额", receivableSummary.payable.amount, "应付已付", receivableSummary.payable.settled, "未付", receivableSummary.payable.remaining, "多付", receivableSummary.payable.over)}
+      <section class="rp-overview">
+        <div class="rp-pending-row">
+          <div class="rp-pending-card pending">
+            <span>待审核往来款</span>
+            <strong>${pendingReceivables}</strong>
+            <small>员工提交的应收应付待确认</small>
+          </div>
+          <div class="rp-pending-card pending">
+            <span>待审核平账</span>
+            <strong>${pendingSettlements}</strong>
+            <small>往来款绑定链上流水待确认</small>
+          </div>
+        </div>
+        <div class="stats-grid rp-stats">
+          ${renderRpStat("应收总额", receivableSummary.receivable.amount, "应收已收", receivableSummary.receivable.settled, "未收", receivableSummary.receivable.remaining, "多收", receivableSummary.receivable.over, "receivable")}
+          ${renderRpStat("应付总额", receivableSummary.payable.amount, "应付已付", receivableSummary.payable.settled, "未付", receivableSummary.payable.remaining, "多付", receivableSummary.payable.over, "payable")}
+        </div>
       </section>
       <section class="grid two-col" style="margin-top:14px">
         <div class="panel"><div class="panel-title"><h3>链上钱包余额</h3></div>${renderWalletBalanceTable()}</div>
@@ -1120,8 +1132,8 @@
     return `
       ${pageHead("往来款管理", "管理应收款和应付款，并用链上流水整笔平账", `<button class="btn primary" data-action="export-receivables">导出 CSV</button>`)}
       <section class="stats-grid rp-stats">
-        ${renderRpStat("应收总额", stats.receivable.amount, "应收已收", stats.receivable.settled, "未收", stats.receivable.remaining, "多收", stats.receivable.over)}
-        ${renderRpStat("应付总额", stats.payable.amount, "应付已付", stats.payable.settled, "未付", stats.payable.remaining, "多付", stats.payable.over)}
+        ${renderRpStat("应收总额", stats.receivable.amount, "应收已收", stats.receivable.settled, "未收", stats.receivable.remaining, "多收", stats.receivable.over, "receivable")}
+        ${renderRpStat("应付总额", stats.payable.amount, "应付已付", stats.payable.settled, "未付", stats.payable.remaining, "多付", stats.payable.over, "payable")}
       </section>
       <section class="grid two-col receivable-layout">
         ${canCreate ? `<div class="panel">
@@ -1200,8 +1212,8 @@
     });
   }
 
-  function renderRpStat(title, amount, settledLabel, settled, remainingLabel, remaining, overLabel, over) {
-    return `<div class="stat-card">
+  function renderRpStat(title, amount, settledLabel, settled, remainingLabel, remaining, overLabel, over, tone = "") {
+    return `<div class="stat-card rp-stat-card ${tone}">
       <span>${title}</span><strong>${money(amount)}</strong><small>USDT</small>
       <div class="stat-breakdown"><span>${settledLabel}：${money(settled)}</span><span>${remainingLabel}：${money(remaining)}</span><span>${overLabel}：${money(over)}</span></div>
     </div>`;

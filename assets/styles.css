@@ -257,7 +257,6 @@ button {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  margin-bottom: 14px;
 }
 
 .rp-stats .stat-card {
@@ -265,7 +264,20 @@ button {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
-  box-shadow: var(--shadow);
+}
+
+.rp-stat-card {
+  border-left: 4px solid var(--line);
+}
+
+.rp-stat-card.receivable {
+  border-left-color: var(--green);
+  background: #f8fffb;
+}
+
+.rp-stat-card.payable {
+  border-left-color: var(--red);
+  background: #fffafa;
 }
 
 .rp-stats .stat-card > span,
@@ -280,11 +292,73 @@ button {
   font-size: 24px;
 }
 
+.rp-stat-card.receivable > strong {
+  color: var(--green);
+}
+
+.rp-stat-card.payable > strong {
+  color: var(--red);
+}
+
 .stat-breakdown {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 12px;
   margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rp-overview {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.rp-pending-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.rp-pending-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  align-items: baseline;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.rp-pending-card.pending {
+  border-color: #f1d6a7;
+  background: #fffaf0;
+}
+
+.rp-pending-card span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rp-pending-card strong {
+  font-size: 22px;
+}
+
+.rp-pending-card.pending strong {
+  color: var(--amber);
+}
+
+.rp-pending-card small {
+  grid-column: 1 / -1;
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
@@ -1538,6 +1612,7 @@ tr:last-child td {
 
   .two-col,
   .rp-stats,
+  .rp-pending-row,
   .user-management-layout,
   .filters,
   .form-grid {
