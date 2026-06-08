@@ -706,6 +706,9 @@
     const unannotated = rows.filter(({ tx, annotation }) => (
       isManagedTransaction(tx) && tx.internalTransferStatus !== "pending" && !annotation
     )).length;
+    const receivableSummary = summarizeReceivables(tenantReceivables());
+    const pendingReceivables = tenantReceivables().filter((item) => item.reviewStatus === "pending").length;
+    const pendingSettlements = tenantSettlements().filter((item) => item.status === "pending").length;
     const syncErrors = tenantWallets().filter((wallet) => wallet.enabled && wallet.lastSyncError);
     return `
       ${pageHead("资金概况", "汇总业务已审核数据、钱包实际流水和链上余额变化")}
@@ -741,6 +744,13 @@
       <section class="grid status-stats">
         <div class="card"><div class="card-label">待审核批注</div><div class="card-value">${pending}</div><div class="card-foot">主管确认业务原由与凭证</div></div>
         <div class="card"><div class="card-label">待批注流水</div><div class="card-value">${unannotated}</div><div class="card-foot">链上已有记录但尚无业务说明</div></div>
+        <div class="card"><div class="card-label">待审核往来款</div><div class="card-value">${pendingReceivables}</div><div class="card-foot">员工提交的应收应付待确认</div></div>
+        <div class="card"><div class="card-label">待审核平账</div><div class="card-value">${pendingSettlements}</div><div class="card-foot">往来款绑定链上流水待确认</div></div>
+      </section>
+      <div class="section-label"><h3>往来款概况</h3><span>只统计已审核且未作废的往来款</span></div>
+      <section class="stats-grid rp-stats">
+        ${renderRpStat("应收总额", receivableSummary.receivable.amount, "应收已收", receivableSummary.receivable.settled, "未收", receivableSummary.receivable.remaining, "多收", receivableSummary.receivable.over)}
+        ${renderRpStat("应付总额", receivableSummary.payable.amount, "应付已付", receivableSummary.payable.settled, "未付", receivableSummary.payable.remaining, "多付", receivableSummary.payable.over)}
       </section>
       <section class="grid two-col" style="margin-top:14px">
         <div class="panel"><div class="panel-title"><h3>链上钱包余额</h3></div>${renderWalletBalanceTable()}</div>
@@ -1105,17 +1115,7 @@
 
   function renderReceivables() {
     const items = filteredReceivables();
-    const stats = items.filter((item) => item.reviewStatus === "approved" && item.status !== "voided").reduce((acc, item) => {
-      const key = item.type;
-      acc[key].amount += Number(item.amount || 0);
-      acc[key].settled += Number(item.settledAmount || 0);
-      acc[key].remaining += Number(item.remainingAmount || 0);
-      acc[key].over += Number(item.overAmount || 0);
-      return acc;
-    }, {
-      receivable: { amount: 0, settled: 0, remaining: 0, over: 0 },
-      payable: { amount: 0, settled: 0, remaining: 0, over: 0 },
-    });
+    const stats = summarizeReceivables(items);
     const canCreate = ["employee", "supervisor"].includes(currentUser().role);
     return `
       ${pageHead("往来款管理", "管理应收款和应付款，并用链上流水整笔平账", `<button class="btn primary" data-action="export-receivables">导出 CSV</button>`)}
@@ -1184,6 +1184,20 @@
 
   function selectedReceivableFilter(key, value) {
     return receivableFilters[key] === value ? "selected" : "";
+  }
+
+  function summarizeReceivables(items) {
+    return items.filter((item) => item.reviewStatus === "approved" && item.status !== "voided").reduce((acc, item) => {
+      const key = item.type;
+      acc[key].amount += Number(item.amount || 0);
+      acc[key].settled += Number(item.settledAmount || 0);
+      acc[key].remaining += Number(item.remainingAmount || 0);
+      acc[key].over += Number(item.overAmount || 0);
+      return acc;
+    }, {
+      receivable: { amount: 0, settled: 0, remaining: 0, over: 0 },
+      payable: { amount: 0, settled: 0, remaining: 0, over: 0 },
+    });
   }
 
   function renderRpStat(title, amount, settledLabel, settled, remainingLabel, remaining, overLabel, over) {
