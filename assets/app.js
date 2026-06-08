@@ -2709,10 +2709,14 @@
     const tx = tenantTransactions().find((entry) => entry.id === txId);
     if (!tx) return;
     const items = receivablesForTransaction(tx);
-    const options = items.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.counterparty)} · ${escapeHtml(item.category)} · 剩余 ${money(item.remainingAmount || item.amount)} USDT</option>`).join("");
-    const selected = items[0] || null;
     const typeText = transactionDirection(tx) === "income" ? "应收款" : "应付款";
-    const preview = selected ? renderReceivableSettlementPreview(selected, tx, false) : `<div class="empty slim">暂无可用${typeText}。请先在往来款管理中创建并审核对应往来款。</div>`;
+    const options = [
+      `<option value="">请选择需要平账的${typeText}</option>`,
+      ...items.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.counterparty)} · ${escapeHtml(item.category)} · 剩余 ${money(item.remainingAmount || item.amount)} USDT</option>`),
+    ].join("");
+    const preview = items.length
+      ? `<div class="empty slim">请选择需要平账的${typeText}，选择后系统会显示本次平账结果。</div>`
+      : `<div class="empty slim">暂无可用${typeText}。请先在往来款管理中创建并审核对应往来款。</div>`;
     const overlay = createFormModal({
       title: `提交${typeText}平账`,
       desc: "当前链上流水会整笔用于平账，不能拆分或部分平账。",
@@ -2727,7 +2731,7 @@
       submitText: "提交平账",
       onSubmit: async (formData, close) => {
         const itemId = formData.get("itemId");
-        if (!itemId) throw new Error(`暂无可用${typeText}`);
+        if (!itemId) throw new Error(`请选择需要平账的${typeText}`);
         await apiMutate(`/api/receivable-payables/${encodeURIComponent(itemId)}/settlements`, {
           body: { txId: tx.id, note: formData.get("note") },
         });
