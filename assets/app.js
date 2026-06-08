@@ -1589,12 +1589,14 @@
     normalizeAccountFilters();
     const roleOptions = accountFilters.tenantStatus === "platform"
       ? [["admin", "管理员"]]
-      : [["supervisor", "主管"], ["employee", "员工"], ["all", "全部角色"]];
+      : accountFilters.tenantStatus === "all"
+        ? [["all", "全部角色"], ["admin", "管理员"], ["supervisor", "主管"], ["employee", "员工"]]
+        : [["supervisor", "主管"], ["employee", "员工"], ["all", "全部角色"]];
     return `<form id="accountFilters" class="form-grid one compact-form">
-      <label>所属系统状态<select name="tenantStatus">
+      <label>账号范围<select name="tenantStatus">
         <option value="enabled" ${accountFilters.tenantStatus === "enabled" ? "selected" : ""}>启用中的系统</option>
         <option value="disabled" ${accountFilters.tenantStatus === "disabled" ? "selected" : ""}>已停用的系统</option>
-        <option value="all" ${accountFilters.tenantStatus === "all" ? "selected" : ""}>全部系统</option>
+        <option value="all" ${accountFilters.tenantStatus === "all" ? "selected" : ""}>全部账号</option>
         <option value="platform" ${accountFilters.tenantStatus === "platform" ? "selected" : ""}>平台账号</option>
       </select></label>
       <label>账号角色<select name="role">
@@ -1608,7 +1610,7 @@
   function normalizeAccountFilters(next = accountFilters) {
     const normalized = { ...defaultAccountFilters(), ...next };
     if (normalized.tenantStatus === "platform") normalized.role = "admin";
-    if (normalized.tenantStatus !== "platform" && normalized.role === "admin") normalized.role = "supervisor";
+    if (["enabled", "disabled"].includes(normalized.tenantStatus) && normalized.role === "admin") normalized.role = "supervisor";
     accountFilters = normalized;
     return normalized;
   }
@@ -2315,6 +2317,11 @@
     document.querySelector("#accountFilters")?.addEventListener("submit", (event) => {
       event.preventDefault();
       normalizeAccountFilters(Object.fromEntries(new FormData(event.target).entries()));
+      save();
+      render();
+    });
+    document.querySelector("#accountFilters select[name='tenantStatus']")?.addEventListener("change", (event) => {
+      normalizeAccountFilters({ ...accountFilters, tenantStatus: event.target.value });
       save();
       render();
     });
