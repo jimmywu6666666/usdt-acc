@@ -2405,6 +2405,7 @@
       rejectionReason = prompt("请输入驳回原因，员工修改后可重新提交") || "";
       if (!rejectionReason.trim()) return;
     }
+    if (!confirm(action === "approve" ? "确认审核通过这条批注？" : "确认驳回这条批注？")) return;
     try {
       await apiMutate(`/api/annotations/${encodeURIComponent(annotationId)}/review`, { body: { action, rejectionReason } });
       render();
@@ -2708,6 +2709,7 @@
       rejectionReason = prompt("请输入驳回原因") || "";
       if (!rejectionReason.trim()) return;
     }
+    if (!confirm(action === "approve" ? "确认审核通过这条往来款？" : "确认驳回这条往来款？")) return;
     try {
       await apiMutate(`/api/receivable-payables/${encodeURIComponent(itemId)}/review`, { body: { action, rejectionReason } });
       render();
@@ -2783,6 +2785,7 @@
       rejectionReason = prompt("请输入驳回原因") || "";
       if (!rejectionReason.trim()) return;
     }
+    if (!confirm(action === "approve" ? "确认审核通过这条平账？" : "确认驳回这条平账？")) return;
     try {
       await apiMutate(`/api/receivable-settlements/${encodeURIComponent(settlementId)}/review`, { body: { action, rejectionReason } });
       render();
