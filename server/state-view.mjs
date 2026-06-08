@@ -9,6 +9,7 @@ export function stateForUser(state, user) {
   safeState.annotations = safeState.annotations.map(annotationForClient);
   safeState.receivablePayables ||= [];
   safeState.receivableSettlements ||= [];
+  safeState.receivablePayables = safeState.receivablePayables.map(receivableForClient);
 
   if (user.role === "admin") {
     safeState.activeUserId = user.id;
@@ -107,6 +108,15 @@ function platformPaymentForClient(payment) {
     createdAt,
     processedAt,
     source,
+  };
+}
+
+function receivableForClient(item) {
+  if (!item.attachment) return item;
+  const { name, originalName, mimeType, byteSize, originalByteSize, compressed } = item.attachment;
+  return {
+    ...item,
+    attachment: { name, originalName, mimeType, byteSize, originalByteSize, compressed },
   };
 }
 

@@ -12,8 +12,10 @@ import {
   enableWallet,
   enforceTenantSubscriptions,
   exportAnnotationsCsv,
+  exportReceivablePayablesCsv,
   getAnnotationAttachment,
   getAuditLogsForUser,
+  getReceivableAttachment,
   getTransactionDetail,
   manualRenewSubscriptionPayment,
   manualRenewTenantSubscription,
@@ -472,6 +474,48 @@ test("receivable settlement rejects wrong direction and historical transactions"
   });
   assert.throws(() => createReceivableSettlement(state, { user: user(state, "emp"), itemId: receivable.id, txId: "old_income" }), /历史无需批注/);
   assert.throws(() => createReceivableSettlement(state, { user: user(state, "emp"), itemId: receivable.id, txId: "expense_tx" }), /应收款只能使用进账/);
+});
+
+test("receivable export follows filters and includes settlement details", () => {
+  const state = ledgerState({
+    chainTransactions: [{
+      id: "income_tx", tenantId: "tenant_alpha", walletId: "wallet", hash: "income_hash", direction: "income",
+      amount: 1005, counterparty: "TCustomer", confirmed: true, chainTime: "2026-06-05T12:30:00.000Z", currentAnnotationId: null,
+    }],
+  });
+  const receivable = createReceivablePayable(state, {
+    user: user(state, "sup"),
+    input: { type: "receivable", counterparty: "客户 A", amount: 1000, category: "客户货款", note: "订单 A" },
+    now: "2026-06-05T12:00:00.000Z",
+  });
+  createReceivablePayable(state, {
+    user: user(state, "sup"),
+    input: { type: "payable", counterparty: "供应商 B", amount: 300, category: "供应商付款", note: "采购" },
+  });
+  const settlement = createReceivableSettlement(state, { user: user(state, "sup"), itemId: receivable.id, txId: "income_tx" });
+  assert.equal(settlement.status, "approved");
+  const csv = exportReceivablePayablesCsv(state, { user: user(state, "sup"), filters: { type: "receivable", keyword: "订单" } });
+  assert.match(csv, /客户 A/);
+  assert.match(csv, /income_hash/);
+  assert.doesNotMatch(csv, /供应商 B/);
+});
+
+test("receivable attachments respect employee visibility", () => {
+  const state = ledgerState();
+  state.users.find((item) => item.id === "other").canViewAll = false;
+  const receivable = createReceivablePayable(state, {
+    user: user(state, "emp"),
+    input: {
+      type: "receivable",
+      counterparty: "客户 A",
+      amount: 1000,
+      category: "客户货款",
+      note: "订单 A",
+      attachment: { name: "receipt.webp", mimeType: "image/webp", byteSize: 10 },
+    },
+  });
+  assert.equal(getReceivableAttachment(state, { user: user(state, "emp"), itemId: receivable.id }).name, "receipt.webp");
+  assert.throws(() => getReceivableAttachment(state, { user: user(state, "other"), itemId: receivable.id }), /没有查看该凭证/);
 });
 
 test("admin creates tenants and global categories", () => {

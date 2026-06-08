@@ -1196,6 +1196,12 @@ tr:last-child td {
   gap: 12px;
 }
 
+.review-section {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
 .review-card {
   padding: 12px;
   border: 1px solid var(--line);

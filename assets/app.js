@@ -19,6 +19,7 @@
   };
   const defaultEntryFilters = () => ({ from: daysAgoInputValue(29), to: dateInputValue(new Date()) });
   const defaultLogFilters = () => ({ from: daysAgoInputValue(6), to: dateInputValue(new Date()) });
+  const defaultReceivableFilters = () => ({});
   const statusMap = {
     unannotated: ["待批注", "orange"],
     pending: ["待审核", "amber"],
@@ -77,6 +78,7 @@
     "审核通过往来款平账",
     "驳回往来款平账",
     "作废往来款",
+    "导出往来款",
   ];
   const adminLogActions = [
     ...supervisorLogActions,
@@ -95,6 +97,7 @@
     "登录系统",
     "登录失败",
     "查看批注凭证",
+    "查看往来款凭证",
     "导出链上流水批注",
     "手动查询链上流水",
     "同步链上流水",
@@ -177,6 +180,7 @@
   let entryFilters = defaultEntryFilters();
   let entriesPage = 1;
   let logFilters = defaultLogFilters();
+  let receivableFilters = defaultReceivableFilters();
   let logsPage = 1;
   let serverMetrics = null;
   let serverMetricsTimer = null;
@@ -250,6 +254,7 @@
       entriesPage,
       logFilters,
       logsPage,
+      receivableFilters,
     }));
   }
 
@@ -261,6 +266,7 @@
     if (Number.isInteger(Number(ui.entriesPage)) && Number(ui.entriesPage) > 0) entriesPage = Number(ui.entriesPage);
     if (ui.logFilters) logFilters = { ...defaultLogFilters(), ...ui.logFilters };
     if (Number.isInteger(Number(ui.logsPage)) && Number(ui.logsPage) > 0) logsPage = Number(ui.logsPage);
+    if (ui.receivableFilters) receivableFilters = { ...defaultReceivableFilters(), ...ui.receivableFilters };
   }
 
   function applyLoadedState(nextState, { preserveUi = true } = {}) {
@@ -1019,14 +1025,20 @@
 
   function renderReview() {
     const pending = state.annotations.filter((annotation) => annotation.tenantId === visibleTenantId() && annotation.status === "pending");
+    const pendingReceivables = tenantReceivables().filter((item) => item.reviewStatus === "pending");
+    const pendingSettlements = tenantSettlements().filter((settlement) => settlement.status === "pending");
     return `
-      ${pageHead("审核中心", canReview() ? "审核员工提交的批注，确认业务说明、凭证和链上金额是否一致" : "查看当前系统待审核批注，便于排查和跟进")}
-      ${canViewReviewCenter() ? renderReviewCards(pending, canReview()) : `<div class="panel empty">当前账号没有审核权限</div>`}
+      ${pageHead("审核中心", canReview() ? "审核批注、往来款和平账申请，确认业务说明、凭证和链上金额是否一致" : "查看当前系统待审核事项，便于排查和跟进")}
+      ${canViewReviewCenter() ? `
+        <section class="review-section"><div class="section-label"><h3>批注待审核</h3><span>${pending.length} 条</span></div>${renderReviewCards(pending, canReview())}</section>
+        <section class="review-section"><div class="section-label"><h3>往来款待审核</h3><span>${pendingReceivables.length} 条</span></div>${renderReceivableReviewCards(pendingReceivables, canReview())}</section>
+        <section class="review-section"><div class="section-label"><h3>平账待审核</h3><span>${pendingSettlements.length} 条</span></div>${renderSettlementReviewCards(pendingSettlements, canReview())}</section>
+      ` : `<div class="panel empty">当前账号没有审核权限</div>`}
     `;
   }
 
   function renderReviewCards(rows, showReviewActions = false) {
-    if (!rows.length) return `<div class="panel empty">暂无待审核批注</div>`;
+    if (!rows.length) return `<div class="panel empty slim">暂无待审核批注</div>`;
     return `<div class="review-cards">${rows.map((annotation) => {
       const tx = state.chainTransactions.find((item) => item.id === annotation.chainTxId);
       const direction = transactionDirection(tx);
@@ -1048,8 +1060,49 @@
     }).join("")}</div>`;
   }
 
+  function renderReceivableReviewCards(rows, showReviewActions = false) {
+    if (!rows.length) return `<div class="panel empty slim">暂无待审核往来款</div>`;
+    return `<div class="review-cards">${rows.map((item) => `<article class="review-card review-${item.type === "receivable" ? "income" : "expense"}">
+      <div class="review-card-head"><strong>${badge({ receivable: ["应收款", "green"], payable: ["应付款", "red"] }, item.type)} <span>${money(item.amount)} USDT</span></strong>${badge(rpReviewMap, item.reviewStatus)}</div>
+      <dl>
+        <div><dt>目标方</dt><dd>${escapeHtml(item.counterparty)}</dd></div>
+        <div><dt>分类</dt><dd>${escapeHtml(item.category)}</dd></div>
+        <div><dt>提交人</dt><dd><span class="review-meta-tag annotator">${escapeHtml(userName(item.createdBy))}</span></dd></div>
+        <div><dt>提交时间</dt><dd>${formatDate(item.createdAt)}</dd></div>
+        <div class="wide"><dt>业务说明</dt><dd>${escapeHtml(item.note)}</dd></div>
+        <div><dt>凭证</dt><dd>${item.attachmentName ? `<button class="attachment-link" data-rp-attachment="${item.id}">${escapeHtml(item.attachmentName)}</button>` : "无凭证"}</dd></div>
+      </dl>
+      <div class="actions">${showReviewActions ? `<button class="btn success" data-rp-review="${item.id}" data-action="approve">审核通过</button><button class="btn danger" data-rp-review="${item.id}" data-action="reject">驳回</button>` : ""}<button class="btn" data-rp-detail="${item.id}">详情</button></div>
+    </article>`).join("")}</div>`;
+  }
+
+  function renderSettlementReviewCards(rows, showReviewActions = false) {
+    if (!rows.length) return `<div class="panel empty slim">暂无待审核平账</div>`;
+    return `<div class="review-cards">${rows.map((settlement) => {
+      const item = tenantReceivables().find((entry) => entry.id === settlement.itemId);
+      const tx = state.chainTransactions.find((entry) => entry.id === settlement.txId);
+      if (!item || !tx) return "";
+      const direction = transactionDirection(tx);
+      const nextSettled = Number(item.settledAmount || 0) + Number(settlement.amount || 0);
+      const over = Math.max(nextSettled - Number(item.amount || 0), 0);
+      return `<article class="review-card review-${direction}">
+        <div class="review-card-head"><strong>${directionPill(direction)} <span class="amount-${direction}">${money(settlement.amount)} USDT</span></strong>${badge(rpSettlementStatusMap, settlement.status)}</div>
+        <dl>
+          <div><dt>往来款</dt><dd>${rpTypeMap[item.type]} · ${escapeHtml(item.counterparty)}</dd></div>
+          <div><dt>原始金额</dt><dd>${money(item.amount)} USDT</dd></div>
+          <div><dt>链上时间</dt><dd>${formatDate(tx.chainTime)}</dd></div>
+          <div><dt>钱包</dt><dd><span class="review-meta-tag wallet">${escapeHtml(transactionWalletText(tx))}</span></dd></div>
+          <div><dt>提交人</dt><dd><span class="review-meta-tag annotator">${escapeHtml(userName(settlement.submittedBy))}</span></dd></div>
+          <div><dt>平账结果</dt><dd>${over > 0 ? `${item.type === "receivable" ? "多收" : "多付"} ${money(over)} USDT` : "不超额"}</dd></div>
+          <div class="wide"><dt>交易哈希</dt><dd class="mono">${escapeHtml(tx.hash)}</dd></div>
+        </dl>
+        <div class="actions">${showReviewActions ? `<button class="btn success" data-rps-review="${settlement.id}" data-action="approve">审核通过</button><button class="btn danger" data-rps-review="${settlement.id}" data-action="reject">驳回</button>` : ""}<button class="btn" data-rp-detail="${item.id}">详情</button></div>
+      </article>`;
+    }).join("")}</div>`;
+  }
+
   function renderReceivables() {
-    const items = tenantReceivables().sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+    const items = filteredReceivables();
     const stats = items.filter((item) => item.reviewStatus === "approved" && item.status !== "voided").reduce((acc, item) => {
       const key = item.type;
       acc[key].amount += Number(item.amount || 0);
@@ -1063,7 +1116,7 @@
     });
     const canCreate = ["employee", "supervisor"].includes(currentUser().role);
     return `
-      ${pageHead("往来款管理", "管理应收款和应付款，并用链上流水整笔平账")}
+      ${pageHead("往来款管理", "管理应收款和应付款，并用链上流水整笔平账", `<button class="btn primary" data-action="export-receivables">导出 CSV</button>`)}
       <section class="stats-grid rp-stats">
         ${renderRpStat("应收总额", stats.receivable.amount, "应收已收", stats.receivable.settled, "未收", stats.receivable.remaining, "多收", stats.receivable.over)}
         ${renderRpStat("应付总额", stats.payable.amount, "应付已付", stats.payable.settled, "未付", stats.payable.remaining, "多付", stats.payable.over)}
@@ -1078,15 +1131,57 @@
             <label>分类<input name="category" required placeholder="客户货款、供应商款、保证金等"></label>
             <label>到期日期<input name="dueDate" type="date"></label>
             <label>业务说明<textarea name="note" required placeholder="客户信息、业务说明等"></textarea></label>
+            <div class="proof-field">
+              <span>凭证上传</span>
+              <div class="proof-upload" data-proof-upload tabindex="0">
+                <input id="receivableProofFile" name="attachmentFile" type="file" accept="image/*">
+                <label class="btn" for="receivableProofFile">上传图片</label>
+                <span class="proof-upload-hint">或点击此处后粘贴截图</span>
+                <div class="proof-preview" data-proof-preview hidden>
+                  <img data-proof-image alt="凭证预览">
+                  <span data-proof-name></span>
+                </div>
+              </div>
+            </div>
             <div class="actions"><button class="btn primary" type="submit">提交往来款</button></div>
           </form>
         </div>` : ""}
         <div class="panel ${canCreate ? "" : "wide-panel"}">
           <div class="panel-title"><h3>往来款列表</h3><span>链上流水用于平账时必须整笔绑定</span></div>
+          ${renderReceivableFilters()}
           ${renderReceivableTable(items)}
         </div>
       </section>
     `;
+  }
+
+  function filteredReceivables() {
+    return tenantReceivables().filter((item) => {
+      if (receivableFilters.type && item.type !== receivableFilters.type) return false;
+      if (receivableFilters.status && item.status !== receivableFilters.status) return false;
+      if (receivableFilters.reviewStatus && item.reviewStatus !== receivableFilters.reviewStatus) return false;
+      if (receivableFilters.counterparty && !String(item.counterparty || "").includes(receivableFilters.counterparty)) return false;
+      if (receivableFilters.keyword) {
+        const text = `${item.counterparty || ""} ${item.category || ""} ${item.note || ""} ${userName(item.createdBy)}`;
+        if (!text.includes(receivableFilters.keyword)) return false;
+      }
+      return true;
+    }).sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+  }
+
+  function renderReceivableFilters() {
+    return `<form id="receivableFilters" class="filters compact-filters">
+      <label>类型<select name="type"><option value="">全部</option><option value="receivable" ${selectedReceivableFilter("type", "receivable")}>应收款</option><option value="payable" ${selectedReceivableFilter("type", "payable")}>应付款</option></select></label>
+      <label>平账状态<select name="status"><option value="">全部</option><option value="open" ${selectedReceivableFilter("status", "open")}>未平账</option><option value="partial" ${selectedReceivableFilter("status", "partial")}>部分平账</option><option value="settled" ${selectedReceivableFilter("status", "settled")}>已平账</option><option value="voided" ${selectedReceivableFilter("status", "voided")}>已作废</option></select></label>
+      <label>审核状态<select name="reviewStatus"><option value="">全部</option><option value="pending" ${selectedReceivableFilter("reviewStatus", "pending")}>待审核</option><option value="approved" ${selectedReceivableFilter("reviewStatus", "approved")}>已通过</option><option value="rejected" ${selectedReceivableFilter("reviewStatus", "rejected")}>已驳回</option></select></label>
+      <label>目标方<input name="counterparty" value="${escapeHtml(receivableFilters.counterparty || "")}" placeholder="客户、供应商"></label>
+      <label>关键词<input name="keyword" value="${escapeHtml(receivableFilters.keyword || "")}" placeholder="分类、说明、创建人"></label>
+      <div class="actions"><button class="btn primary" type="submit">查询</button><button class="btn" type="reset">清空</button></div>
+    </form>`;
+  }
+
+  function selectedReceivableFilter(key, value) {
+    return receivableFilters[key] === value ? "selected" : "";
   }
 
   function renderRpStat(title, amount, settledLabel, settled, remainingLabel, remaining, overLabel, over) {
@@ -1102,7 +1197,7 @@
       return `<tr>
         <td>${formatDate(item.createdAt)}<br><span class="muted">${escapeHtml(userName(item.createdBy))}</span></td>
         <td>${badge({ receivable: ["应收款", "green"], payable: ["应付款", "red"] }, item.type)}</td>
-        <td><strong>${escapeHtml(item.counterparty)}</strong><br><span class="muted">${escapeHtml(item.category)}</span></td>
+        <td><strong>${escapeHtml(item.counterparty)}</strong><br><span class="muted">${escapeHtml(item.category)}</span>${item.attachmentName ? `<br><button class="attachment-link" data-rp-attachment="${item.id}">${escapeHtml(item.attachmentName)}</button>` : ""}</td>
         <td>${money(item.amount)}</td>
         <td>${money(item.settledAmount || 0)}</td>
         <td>${money(item.remainingAmount || 0)}</td>
@@ -1511,7 +1606,7 @@
             <div><span>凭证数量</span><strong>${serverMetrics.attachments.annotationCount}</strong></div>
             <div><span>附件文件</span><strong>${serverMetrics.attachments.fileCount}</strong></div>
             <div><span>附件目录占用</span><strong>${formatBytes(serverMetrics.attachments.totalBytes)}</strong></div>
-            <div><span>批注记录内大小</span><strong>${formatBytes(serverMetrics.attachments.storedAttachmentBytes)}</strong></div>
+            <div><span>记录内大小</span><strong>${formatBytes(serverMetrics.attachments.storedAttachmentBytes)}</strong></div>
             <div><span>今日新增</span><strong>${serverMetrics.attachments.growth.today.count} 个 / ${formatBytes(serverMetrics.attachments.growth.today.bytes)}</strong></div>
             <div><span>本月新增</span><strong>${serverMetrics.attachments.growth.month.count} 个 / ${formatBytes(serverMetrics.attachments.growth.month.bytes)}</strong></div>
             <div><span>压缩节省</span><strong>${formatBytes(serverMetrics.attachments.growth.savedBytes)}</strong></div>
@@ -1642,6 +1737,7 @@
         ${helpSection("九、往来款管理", [
           "往来款管理用于记录应收款和应付款，并用链上流水进行整笔平账。",
           "员工可以提交应收款或应付款，主管审核通过后才能平账；主管创建的往来款直接生效。",
+          "提交往来款时可上传或粘贴凭证图片，方便主管审核业务来源和金额依据。",
           "应收款只能选择进账流水平账，应付款只能选择出账流水平账。",
           "链上流水只要在钱包纳入管理时间之后即可用于平账，不要求先完成批注审核。",
           "纳入管理时间之前的历史无需批注流水不能用于平账。",
@@ -1811,6 +1907,7 @@
       entriesPage = 1;
       logFilters = defaultLogFilters();
       logsPage = 1;
+      receivableFilters = defaultReceivableFilters();
       save();
       render();
       refreshVisibleChainStatus();
@@ -1853,6 +1950,17 @@
       changeLogsPage(event.target.value);
     });
     document.querySelector("[data-action='export']")?.addEventListener("click", exportCsv);
+    document.querySelector("[data-action='export-receivables']")?.addEventListener("click", exportReceivablesCsv);
+    document.querySelector("#receivableFilters")?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      receivableFilters = Object.fromEntries(new FormData(event.target).entries());
+      render();
+    });
+    document.querySelector("#receivableFilters")?.addEventListener("reset", (event) => {
+      event.preventDefault();
+      receivableFilters = defaultReceivableFilters();
+      render();
+    });
     document.querySelector("[data-action='refresh-server']")?.addEventListener("click", () => refreshServerMetrics().then(render));
     document.querySelector("#annotationForm")?.addEventListener("submit", submitAnnotation);
     document.querySelector("[data-chain-tx]")?.addEventListener("change", (event) => {
@@ -1884,6 +1992,7 @@
     document.querySelectorAll("[data-rp-settle]").forEach((button) => button.addEventListener("click", () => openReceivableSettlement(button.dataset.rpSettle)));
     document.querySelectorAll("[data-rp-detail]").forEach((button) => button.addEventListener("click", () => openReceivableDetail(button.dataset.rpDetail)));
     document.querySelectorAll("[data-rp-void]").forEach((button) => button.addEventListener("click", () => voidReceivable(button.dataset.rpVoid)));
+    document.querySelectorAll("[data-rp-attachment]").forEach((button) => button.addEventListener("click", () => previewReceivableAttachment(button.dataset.rpAttachment)));
     document.querySelectorAll("[data-rps-review]").forEach((button) => button.addEventListener("click", () => reviewReceivableSettlement(button.dataset.rpsReview, button.dataset.action)));
     document.querySelectorAll("[data-manual-renew]").forEach((button) => button.addEventListener("click", () => manualRenewPayment(button.dataset.manualRenew)));
     document.querySelectorAll("[data-tenant-manual-renew]").forEach((button) => button.addEventListener("click", () => manualRenewTenant(button.dataset.tenantManualRenew)));
@@ -2179,6 +2288,8 @@
       },
     });
     document.body.append(overlay);
+    overlay.querySelectorAll("[data-rp-attachment]").forEach((button) => button.addEventListener("click", () => previewReceivableAttachment(button.dataset.rpAttachment)));
+    overlay.querySelectorAll("[data-rps-review]").forEach((button) => button.addEventListener("click", () => reviewReceivableSettlement(button.dataset.rpsReview, button.dataset.action)));
   }
 
   function markNonBusiness(txId) {
@@ -2383,8 +2494,10 @@
 
   async function submitReceivable(event) {
     event.preventDefault();
-    const data = Object.fromEntries(new FormData(event.target).entries());
+    const formData = new FormData(event.target);
+    const data = Object.fromEntries(formData.entries());
     try {
+      const attachment = await readUpload(formData.get("attachmentFile"));
       await apiMutate("/api/receivable-payables", {
         body: {
           type: data.type,
@@ -2393,6 +2506,7 @@
           category: data.category,
           dueDate: data.dueDate,
           note: data.note,
+          attachment,
         },
       });
       render();
@@ -2510,6 +2624,7 @@
           <div><span>剩余</span><strong>${money(item.remainingAmount || 0)} USDT</strong></div>
           <div><span>状态</span><strong>${badge(rpStatusMap, item.status)} ${badge(rpReviewMap, item.reviewStatus)}</strong></div>
           <div><span>差额</span><strong>${Number(item.overAmount || 0) > 0 ? `${item.type === "receivable" ? "多收" : "多付"} ${money(item.overAmount)} USDT` : "-"}</strong></div>
+          <div><span>凭证</span><strong>${item.attachmentName ? `<button class="attachment-link" data-rp-attachment="${item.id}">${escapeHtml(item.attachmentName)}</button>` : "无凭证"}</strong></div>
           <div class="wide"><span>说明</span><strong>${escapeHtml(item.note || "-")}</strong></div>
         </section>
         <div class="detail-list">
@@ -2883,9 +2998,38 @@
     }
   }
 
-  async function previewAttachment(annotationId) {
+  async function exportReceivablesCsv() {
+    const filters = { ...receivableFilters, tenantId: visibleTenantId() };
     try {
-      const response = await fetch(`/api/annotations/${encodeURIComponent(annotationId)}/attachment`, { headers: authHeaders() });
+      const response = await fetch("/api/exports/receivables", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ filters }),
+      });
+      if (!response.ok) throw new Error((await response.json()).error || "导出失败");
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `往来款-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast("往来款 CSV 已导出");
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+
+  async function previewAttachment(annotationId) {
+    return previewProof(`/api/annotations/${encodeURIComponent(annotationId)}/attachment`);
+  }
+
+  async function previewReceivableAttachment(itemId) {
+    return previewProof(`/api/receivable-payables/${encodeURIComponent(itemId)}/attachment`);
+  }
+
+  async function previewProof(url) {
+    try {
+      const response = await fetch(url, { headers: authHeaders() });
       if (!response.ok) throw new Error((await response.json()).error || "凭证加载失败");
       const disposition = response.headers.get("Content-Disposition") || "";
       const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];

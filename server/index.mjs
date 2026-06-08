@@ -19,7 +19,9 @@ import {
   disableWallet,
   enableWallet,
   exportAnnotationsCsv,
+  exportReceivablePayablesCsv,
   getAnnotationAttachment,
+  getReceivableAttachment,
   getAuditLogsForUser,
   getTransactionDetail,
   manualRenewSubscriptionPayment,
@@ -407,7 +409,8 @@ async function handleApi(req, res, pathname) {
     const body = await readJsonBody(req);
     const state = await storage.mutateState(async (current) => {
       const { user } = await authenticate(current);
-      createReceivablePayable(current, { user, input: body });
+      const item = createReceivablePayable(current, { user, input: { ...body, attachment: null } });
+      await storeReceivableUpload(item, body.attachment);
       return current;
     });
     respond(200, { ok: true, state });
@@ -618,6 +621,24 @@ async function handleApi(req, res, pathname) {
     return;
   }
 
+  if (pathname === "/api/exports/receivables" && req.method === "POST") {
+    const body = await readJsonBody(req);
+    let csv = "";
+    await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      csv = exportReceivablePayablesCsv(current, { user, filters: body.filters || {} });
+      appendLog(current, {
+        tenantId: user.role === "admin" ? body.filters?.tenantId || current.activeTenantId : user.tenantId,
+        userId: user.id,
+        action: "导出往来款",
+        target: `filters:${Object.keys(body.filters || {}).filter((key) => body.filters[key]).join("|") || "全部"}`,
+      });
+      return current;
+    });
+    sendCsv(res, `receivables-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+    return;
+  }
+
   if (pathname === "/api/audit-logs" && req.method === "GET") {
     const state = await storage.readState();
     if (!state) {
@@ -745,6 +766,25 @@ async function handleApi(req, res, pathname) {
     return;
   }
 
+  const receivableAttachment = pathname.match(/^\/api\/receivable-payables\/([^/]+)\/attachment$/);
+  if (receivableAttachment && req.method === "GET") {
+    let attachment;
+    await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      attachment = getReceivableAttachment(current, { user, itemId: receivableAttachment[1] });
+      appendLog(current, {
+        tenantId: user.role === "admin" ? current.receivablePayables.find((item) => item.id === receivableAttachment[1])?.tenantId : user.tenantId,
+        userId: user.id,
+        action: "查看往来款凭证",
+        target: receivableAttachment[1],
+      });
+      return current;
+    });
+    const file = await attachmentStore.read(attachment);
+    sendAttachment(res, file);
+    return;
+  }
+
   respond(404, { error: "API 不存在" });
 }
 
@@ -788,6 +828,13 @@ async function storeAnnotationUpload(annotation, upload) {
   annotation.attachmentName = stored.name;
 }
 
+async function storeReceivableUpload(item, upload) {
+  if (!upload) return;
+  const stored = await attachmentStore.saveUpload(upload, { tenantId: item.tenantId });
+  item.attachment = stored;
+  item.attachmentName = stored.name;
+}
+
 function sendAttachment(res, file) {
   const encodedName = encodeURIComponent(file.name).replace(/[!'()*]/g, (character) => (
     `%${character.charCodeAt(0).toString(16).toUpperCase()}`
@@ -809,9 +856,12 @@ async function collectServerMetrics(state) {
     attachmentStore.stats(),
     storage.metrics?.() || Promise.resolve({ kind: storage.kind, connected: false }),
   ]);
-  const annotationAttachments = (state.annotations || []).filter((annotation) => annotation.attachment).length;
-  const storedAttachmentBytes = (state.annotations || []).reduce((sum, annotation) => (
-    sum + Number(annotation.attachment?.byteSize || 0)
+  const proofItems = [
+    ...(state.annotations || []),
+    ...(state.receivablePayables || []),
+  ].filter((item) => item.attachment);
+  const storedAttachmentBytes = proofItems.reduce((sum, item) => (
+    sum + Number(item.attachment?.byteSize || 0)
   ), 0);
   const now = new Date();
   const todayStart = startOfChinaDay(now);
@@ -855,7 +905,7 @@ async function collectServerMetrics(state) {
       walletBalanceSnapshots: (state.walletBalanceSnapshots || []).length,
     },
     attachments: {
-      annotationCount: annotationAttachments,
+      annotationCount: proofItems.length,
       storedAttachmentBytes,
       fileCount: attachments.fileCount,
       totalBytes: attachments.totalBytes,
@@ -877,17 +927,20 @@ async function collectServerMetrics(state) {
 }
 
 function attachmentGrowthStats(state, { todayStart, monthStart }) {
-  const annotations = (state.annotations || []).filter((annotation) => annotation.attachment);
-  const summarize = (start) => annotations.reduce((summary, annotation) => {
-    if (new Date(annotation.createdAt || annotation.annotatedAt || 0) < start) return summary;
+  const proofItems = [
+    ...(state.annotations || []),
+    ...(state.receivablePayables || []),
+  ].filter((item) => item.attachment);
+  const summarize = (start) => proofItems.reduce((summary, item) => {
+    if (new Date(item.createdAt || item.annotatedAt || 0) < start) return summary;
     summary.count += 1;
-    summary.bytes += Number(annotation.attachment?.byteSize || 0);
-    summary.originalBytes += Number(annotation.attachment?.originalByteSize || annotation.attachment?.byteSize || 0);
+    summary.bytes += Number(item.attachment?.byteSize || 0);
+    summary.originalBytes += Number(item.attachment?.originalByteSize || item.attachment?.byteSize || 0);
     return summary;
   }, { count: 0, bytes: 0, originalBytes: 0 });
-  const total = annotations.reduce((summary, annotation) => {
-    summary.originalBytes += Number(annotation.attachment?.originalByteSize || annotation.attachment?.byteSize || 0);
-    summary.bytes += Number(annotation.attachment?.byteSize || 0);
+  const total = proofItems.reduce((summary, item) => {
+    summary.originalBytes += Number(item.attachment?.originalByteSize || item.attachment?.byteSize || 0);
+    summary.bytes += Number(item.attachment?.byteSize || 0);
     return summary;
   }, { bytes: 0, originalBytes: 0 });
   return {

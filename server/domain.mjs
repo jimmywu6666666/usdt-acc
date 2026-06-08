@@ -374,6 +374,7 @@ export function createReceivablePayable(state, { user, input, now = new Date().t
     note,
     dueDate: input.dueDate || "",
     attachmentName: input.attachmentName || "",
+    attachment: input.attachment || null,
     createdBy: user.id,
     createdAt: now,
     reviewStatus: user.role === "supervisor" ? "approved" : "pending",
@@ -521,6 +522,16 @@ export function voidReceivablePayable(state, { user, itemId, reason, now = new D
   return item;
 }
 
+export function getReceivableAttachment(state, { user, itemId }) {
+  reconcileState(state);
+  const item = state.receivablePayables.find((entry) => entry.id === itemId);
+  if (!item) throw notFound("往来款不存在");
+  if (user.role !== "admin" && item.tenantId !== user.tenantId) throw forbidden("没有查看该凭证的权限");
+  if (user.role === "employee" && !user.canViewAll && item.createdBy !== user.id) throw forbidden("没有查看该凭证的权限");
+  if (!item.attachment) throw notFound("该往来款没有凭证");
+  return item.attachment;
+}
+
 export function getTransactionDetail(state, { user, txId }) {
   reconcileState(state);
   const tx = getVisibleTransaction(state, user, txId);
@@ -571,6 +582,38 @@ export function exportAnnotationsCsv(state, { user, filters = {} }) {
       csvCell(annotation ? userName(state, annotation.annotatedBy) : ""),
       csvCell(tx.internalTransferStatus === "pending" ? "内部划转待确认" : annotationStatusLabel(annotation)),
     ].join(",")),
+  ].join("\n");
+}
+
+export function exportReceivablePayablesCsv(state, { user, filters = {} }) {
+  reconcileState(state);
+  const rows = visibleReceivablePayables(state, user, filters);
+  const headers = ["创建时间", "类型", "目标方", "分类", "金额", "已平", "剩余", "多收/多付", "业务状态", "审核状态", "创建人", "说明", "平账流水"];
+  return [
+    headers.join(","),
+    ...rows.map((item) => {
+      const settlements = (state.receivableSettlements || [])
+        .filter((settlement) => settlement.itemId === item.id && settlement.status === "approved")
+        .map((settlement) => {
+          const tx = state.chainTransactions.find((entry) => entry.id === settlement.txId);
+          return tx ? `${formatDate(tx.chainTime)} ${tx.hash} ${settlement.amount}` : `${settlement.txId} ${settlement.amount}`;
+        }).join("；");
+      return [
+        csvCell(formatDate(item.createdAt)),
+        csvCell(item.type === "receivable" ? "应收款" : "应付款"),
+        csvCell(item.counterparty),
+        csvCell(item.category),
+        csvCell(item.amount),
+        csvCell(item.settledAmount || 0),
+        csvCell(item.remainingAmount || 0),
+        csvCell(item.overAmount ? `${item.type === "receivable" ? "多收" : "多付"} ${item.overAmount}` : ""),
+        csvCell(receivableStatusLabel(item.status)),
+        csvCell(reviewStatusLabel(item.reviewStatus)),
+        csvCell(userName(state, item.createdBy)),
+        csvCell(item.note || ""),
+        csvCell(settlements),
+      ].join(",");
+    }),
   ].join("\n");
 }
 
@@ -1138,6 +1181,25 @@ function visibleTransactions(state, user, filters) {
     .sort((left, right) => compareTransactionRows(state, left, right));
 }
 
+function visibleReceivablePayables(state, user, filters = {}) {
+  const tenantId = user.role === "admin" ? filters.tenantId : user.tenantId;
+  return (state.receivablePayables || [])
+    .filter((item) => {
+      if (tenantId && item.tenantId !== tenantId) return false;
+      if (user.role === "employee" && !user.canViewAll && item.createdBy !== user.id) return false;
+      if (filters.type && item.type !== filters.type) return false;
+      if (filters.status && item.status !== filters.status) return false;
+      if (filters.reviewStatus && item.reviewStatus !== filters.reviewStatus) return false;
+      if (filters.counterparty && !String(item.counterparty || "").includes(filters.counterparty)) return false;
+      if (filters.keyword) {
+        const text = `${item.counterparty || ""} ${item.category || ""} ${item.note || ""} ${userName(state, item.createdBy)}`;
+        if (!text.includes(filters.keyword)) return false;
+      }
+      return true;
+    })
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+}
+
 function transactionStatus(state, tx, annotation) {
   if (tx.internalTransferStatus === "pending") return "transfer_pending";
   if (annotation?.status === "approved" && annotation.correctionType === "reversal") return "reversal";
@@ -1294,6 +1356,23 @@ function annotationStatusLabel(annotation) {
     non_business: "非业务流水",
     restored: "已恢复待批注",
   }[annotation.status] || annotation.status;
+}
+
+function receivableStatusLabel(status) {
+  return ({
+    open: "未平账",
+    partial: "部分平账",
+    settled: "已平账",
+    voided: "已作废",
+  })[status] || status || "";
+}
+
+function reviewStatusLabel(status) {
+  return ({
+    pending: "待审核",
+    approved: "已通过",
+    rejected: "已驳回",
+  })[status] || status || "";
 }
 
 export function isManagedTransaction(tx, wallet) {
