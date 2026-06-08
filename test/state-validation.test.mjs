@@ -422,6 +422,16 @@ test("admin and supervisor reset account password and login key within permissio
   assert.throws(() => resetUserPassword(state, { user: user(state, "sup"), userId: "beta_emp", password: "newpass123" }), /没有操作该账号的权限|当前账号没有主管权限/);
 });
 
+test("users can reset their own password and login key only", () => {
+  const state = ledgerState();
+  resetUserPassword(state, { user: user(state, "emp"), userId: "emp", password: "selfpass123" });
+  assert.equal(verifyPassword(user(state, "emp"), "selfpass123", { allowDemoPassword: false }), true);
+  const reset = resetUserTotp(state, { user: user(state, "emp"), userId: "emp" });
+  assert.ok(reset.totpSecret);
+  assert.throws(() => resetUserPassword(state, { user: user(state, "emp"), userId: "other", password: "badpass123" }), /当前账号没有主管权限|没有操作该账号的权限/);
+  assert.throws(() => resetUserTotp(state, { user: user(state, "emp"), userId: "other" }), /当前账号没有主管权限|没有操作该账号的权限/);
+});
+
 test("admin wallet enabled limit blocks new and re-enabled wallets", () => {
   const state = ledgerState();
   updateSystemSettings(state, {

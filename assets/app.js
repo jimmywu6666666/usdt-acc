@@ -756,6 +756,7 @@
     if (role === "admin") nav.splice(-1, 0, ["admin", "系统管理"]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["subscription", role === "admin" ? "租用管理" : "租用续费"]);
     if (role === "admin") nav.splice(-1, 0, ["server", "服务器管理"]);
+    nav.splice(-1, 0, ["profile", "我的账号"]);
     nav.splice(-1, 0, ["help", "使用说明"]);
     return `<aside class="sidebar">${nav.map(([key, label]) => `<button class="nav-btn ${state.activeView === key ? "active" : ""}" data-nav="${key}">${label}</button>`).join("")}</aside>`;
   }
@@ -779,6 +780,7 @@
       admin: renderAdmin,
       subscription: renderSubscription,
       server: renderServer,
+      profile: renderProfile,
       help: renderHelp,
       logs: renderLogs,
     };
@@ -1556,6 +1558,33 @@
     </table></div>`;
   }
 
+  function renderProfile() {
+    const user = currentUser();
+    return `
+      ${pageHead("我的账号", "查看自己的登录信息，修改密码或重新绑定登录密钥")}
+      <section class="grid two-col">
+        <div class="panel">
+          <div class="panel-title"><h3>账号信息</h3></div>
+          <div class="metric-list">
+            <div><span>姓名</span><strong>${escapeHtml(user.name)}</strong></div>
+            <div><span>登录账号</span><strong>${escapeHtml(user.loginName || user.id || "-")}</strong></div>
+            <div><span>角色</span><strong>${roleLabel(user.role)}</strong></div>
+            <div><span>所属系统</span><strong>${escapeHtml(user.tenantId ? tenantName(user.tenantId) : "平台")}</strong></div>
+            <div><span>登录密钥</span><strong>${user.totpEnabled ? "已绑定" : "未绑定"}</strong></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-title"><h3>安全设置</h3><span>修改后旧密码或旧验证码立即失效</span></div>
+          <div class="actions profile-actions">
+            <button class="btn primary" data-reset-password="${user.id}">修改我的密码</button>
+            <button class="btn" data-reset-totp="${user.id}">重置我的登录密钥</button>
+          </div>
+          <p class="form-hint">重置登录密钥后，请立即把新密钥保存到验证器；下次登录需要使用新的 6 位动态验证码。</p>
+        </div>
+      </section>
+    `;
+  }
+
   function renderAccountFilters() {
     return `<form id="accountFilters" class="form-grid one compact-form">
       <label>所属系统状态<select name="tenantStatus">
@@ -1960,6 +1989,7 @@
         ${helpSection("一、登录和基础规则", [
           "登录后，系统会根据账号角色显示可用菜单。",
           "正式登录使用登录账号和密码；已绑定登录密钥的账号还需要输入验证器里的 6 位动态验证码。",
+          "所有用户都可以在我的账号中修改自己的登录密码或重置自己的登录密钥。",
           "员工主要处理链上流水批注、往来款提交、平账提交、账目查询和自己的操作日志。",
           "主管除员工功能外，还可以审核批注、审核往来款、审核平账、管理员工账号、维护本系统钱包、处理非业务流水和提交租用续费哈希。",
           "系统里的金额、钱包、方向、链上时间和交易哈希都来自链上流水，不能手工修改。",

@@ -763,7 +763,7 @@ export function updateTenantStatus(state, { user, tenantId, enabled, now = new D
 export function resetUserTotp(state, { user, userId, now = new Date().toISOString() }) {
   const target = state.users.find((item) => item.id === userId);
   if (!target) throw notFound("账号不存在");
-  if (user.role !== "admin") {
+  if (target.id !== user.id && user.role !== "admin") {
     assertSupervisor(state, user.id, target.tenantId);
     if (target.tenantId !== user.tenantId) throw forbidden("没有操作该账号的权限");
   }
@@ -781,7 +781,7 @@ export function resetUserTotp(state, { user, userId, now = new Date().toISOStrin
 export function resetUserPassword(state, { user, userId, password, now = new Date().toISOString() }) {
   const target = state.users.find((item) => item.id === userId);
   if (!target) throw notFound("账号不存在");
-  if (user.role !== "admin") {
+  if (target.id !== user.id && user.role !== "admin") {
     assertSupervisor(state, user.id, target.tenantId);
     if (target.tenantId !== user.tenantId) throw forbidden("没有操作该账号的权限");
   }
