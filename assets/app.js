@@ -1753,6 +1753,9 @@
             ${serverMetrics.database.updatedAt ? `<div><span>最近写入</span><strong>${formatDate(serverMetrics.database.updatedAt)}</strong></div>` : ""}
           </div>
         </div>
+        ${renderBackupPanel(serverMetrics.backups)}
+      </section>
+      <section class="grid server-panels">
         <div class="panel">
           <div class="panel-title"><h3>安全状态</h3></div>
           <div class="metric-list">
@@ -1763,8 +1766,6 @@
             <div><span>本月登录失败</span><strong>${serverMetrics.security.failedLoginsThisMonth}</strong></div>
           </div>
         </div>
-      </section>
-      <section class="grid server-panels">
         <div class="panel">
           <div class="panel-title"><h3>附件凭证空间</h3><span>${formatDate(serverMetrics.capturedAt)}</span></div>
           <div class="metric-list">
@@ -1796,6 +1797,30 @@
         ${eventPanel("最近登录失败", serverMetrics.security.recentFailedLogins)}
       </section>
     `;
+  }
+
+  function renderBackupPanel(backups = {}) {
+    const timerActive = backups.timer?.active === "active";
+    const timerEnabled = backups.timer?.enabled === "enabled";
+    return `<div class="panel">
+      <div class="panel-title"><h3>备份状态</h3><span>${healthText(backups.exists, "目录正常", "目录异常")}</span></div>
+      <div class="metric-list">
+        <div><span>定时备份</span><strong>${healthText(timerActive && timerEnabled, timerActive ? "运行中" : "未运行", "异常")}</strong></div>
+        <div><span>最近执行</span><strong>${formatDate(backups.timer?.lastRun)}</strong></div>
+        <div><span>下次执行</span><strong>${formatDate(backups.timer?.nextRun)}</strong></div>
+        <div><span>备份文件</span><strong>${backups.fileCount ?? 0}</strong></div>
+        <div><span>目录占用</span><strong>${formatBytes(backups.totalBytes || 0)}</strong></div>
+        <div><span>最近数据库</span><strong>${backupFileText(backups.latestDatabaseBackup)}</strong></div>
+        <div><span>最近附件</span><strong>${backupFileText(backups.latestAttachmentBackup)}</strong></div>
+        <div><span>最近校验</span><strong>${backupFileText(backups.latestChecksum)}</strong></div>
+      </div>
+      <p class="muted mono">${escapeHtml(backups.rootDir || "-")}</p>
+    </div>`;
+  }
+
+  function backupFileText(file) {
+    if (!file) return "-";
+    return `${formatDate(file.mtime)} · ${formatBytes(file.size)}`;
   }
 
   function metricCard(label, value, foot, barValue) {

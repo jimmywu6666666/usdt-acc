@@ -2,6 +2,7 @@ import "./config.mjs";
 import { createServer } from "node:http";
 import { readdir, stat, statfs } from "node:fs/promises";
 import { createReadStream } from "node:fs";
+import { execFile } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -850,11 +851,12 @@ function sendAttachment(res, file) {
 }
 
 async function collectServerMetrics(state) {
-  const [cpu, disk, attachments, database] = await Promise.all([
+  const [cpu, disk, attachments, database, backups] = await Promise.all([
     sampleCpuUsage(),
     diskUsage(rootDir),
     attachmentStore.stats(),
     storage.metrics?.() || Promise.resolve({ kind: storage.kind, connected: false }),
+    backupMetrics(),
   ]);
   const proofItems = [
     ...(state.annotations || []),
@@ -886,6 +888,7 @@ async function collectServerMetrics(state) {
     },
     disk,
     database,
+    backups,
     service: {
       storage: storage.kind,
       chainProvider: tronProvider.kind,
@@ -924,6 +927,80 @@ async function collectServerMetrics(state) {
       recentFailedLogins: failedLoginLogs.slice(0, 5),
     },
   };
+}
+
+async function backupMetrics() {
+  const backupDir = process.env.BACKUP_DIR || "/var/lib/usdt-ledger/backups";
+  const [directory, timer] = await Promise.all([
+    directorySummary(backupDir),
+    systemdTimerStatus("usdt-ledger-backup.timer"),
+  ]);
+  const files = directory.files.filter((file) => (
+    file.name.endsWith(".dump") || file.name.endsWith(".tar.gz") || file.name.endsWith(".sha256")
+  ));
+  const latestBySuffix = (suffix) => files
+    .filter((file) => file.name.endsWith(suffix))
+    .sort((left, right) => right.mtimeMs - left.mtimeMs)[0] || null;
+  return {
+    rootDir: backupDir,
+    exists: directory.exists,
+    fileCount: files.length,
+    totalBytes: directory.totalBytes,
+    latestDatabaseBackup: backupFileForClient(latestBySuffix(".dump")),
+    latestAttachmentBackup: backupFileForClient(latestBySuffix(".tar.gz")),
+    latestChecksum: backupFileForClient(latestBySuffix(".sha256")),
+    timer,
+  };
+}
+
+async function directorySummary(directory) {
+  const files = [];
+  let totalBytes = 0;
+  const entries = await readdir(directory, { withFileTypes: true }).catch(() => null);
+  if (!entries) return { exists: false, files, totalBytes };
+  await Promise.all(entries.map(async (entry) => {
+    if (!entry.isFile()) return;
+    const filePath = path.join(directory, entry.name);
+    const info = await stat(filePath).catch(() => null);
+    if (!info) return;
+    totalBytes += info.size;
+    files.push({ name: entry.name, size: info.size, mtime: info.mtime.toISOString(), mtimeMs: info.mtimeMs });
+  }));
+  return { exists: true, files, totalBytes };
+}
+
+function backupFileForClient(file) {
+  if (!file) return null;
+  return { name: file.name, size: file.size, mtime: file.mtime };
+}
+
+async function systemdTimerStatus(timerName) {
+  const active = await execFileText("systemctl", ["is-active", timerName]);
+  const enabled = await execFileText("systemctl", ["is-enabled", timerName]);
+  const next = await execFileText("systemctl", ["show", timerName, "--property=NextElapseUSecRealtime", "--value"]);
+  const last = await execFileText("systemctl", ["show", timerName, "--property=LastTriggerUSec", "--value"]);
+  return {
+    name: timerName,
+    active: active.ok ? active.stdout.trim() : "unknown",
+    enabled: enabled.ok ? enabled.stdout.trim() : "unknown",
+    nextRun: systemdUsecToIso(next.stdout),
+    lastRun: systemdUsecToIso(last.stdout),
+  };
+}
+
+function execFileText(command, args) {
+  return new Promise((resolve) => {
+    execFile(command, args, { timeout: 3000 }, (error, stdout, stderr) => {
+      resolve({ ok: !error, stdout: stdout || "", stderr: stderr || "", error: error?.message || "" });
+    });
+  });
+}
+
+function systemdUsecToIso(value) {
+  const text = String(value || "").trim();
+  if (!text || text === "0" || text === "n/a" || text === "infinity") return null;
+  const millis = Number(text) / 1000;
+  return Number.isFinite(millis) && millis > 0 ? new Date(millis).toISOString() : null;
 }
 
 function attachmentGrowthStats(state, { todayStart, monthStart }) {
