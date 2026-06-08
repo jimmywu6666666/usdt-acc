@@ -4,6 +4,7 @@
   const UI_STATE_KEY = "usdt-ledger-ui:v1";
   const API_STATE = "/api/state";
   const AUTO_REFRESH_MS = 30000;
+  const APP_VERSION_CHECK_MS = 60000;
   const nowIso = () => new Date().toISOString();
   const money = (value) => Number(value || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const dateInputValue = (date) => {
@@ -152,6 +153,9 @@
   let serverMetricsTimer = null;
   let autoRefreshTimer = null;
   let autoRefreshInFlight = false;
+  let appVersionTimer = null;
+  let currentAppVersion = "";
+  let appUpdateAvailable = false;
   const ENTRY_PAGE_SIZE = 30;
   const LOG_PAGE_SIZE = 30;
 
@@ -278,6 +282,40 @@
     }
     el.textContent = message;
     toastTimer = setTimeout(() => el.remove(), 2800);
+  }
+
+  function startAppVersionCheck() {
+    if (appVersionTimer) return;
+    checkAppVersion();
+    appVersionTimer = setInterval(checkAppVersion, APP_VERSION_CHECK_MS);
+  }
+
+  async function checkAppVersion() {
+    try {
+      const response = await fetch("/api/app-version", { headers: authHeaders() });
+      if (!response.ok) return;
+      const payload = await response.json();
+      if (!payload.version) return;
+      if (!currentAppVersion) {
+        currentAppVersion = payload.version;
+        return;
+      }
+      if (payload.version !== currentAppVersion) showAppUpdateNotice();
+    } catch {
+      // Version checking is advisory only; keep the current screen untouched.
+    }
+  }
+
+  function showAppUpdateNotice() {
+    if (appUpdateAvailable) return;
+    appUpdateAvailable = true;
+    const existing = document.querySelector(".app-update-notice");
+    if (existing) return;
+    const notice = document.createElement("div");
+    notice.className = "app-update-notice";
+    notice.innerHTML = `<span>系统已更新，刷新后可使用最新版本。</span><button type="button">刷新更新</button>`;
+    notice.querySelector("button").addEventListener("click", () => window.location.reload());
+    document.body.appendChild(notice);
   }
 
   function currentUser() {
@@ -2710,6 +2748,7 @@
   }
 
   async function init() {
+    startAppVersionCheck();
     await ensureInitialState();
     state = await load();
     if (session?.token) {

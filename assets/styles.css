@@ -1064,6 +1064,35 @@ tr:last-child td {
   box-shadow: var(--shadow);
 }
 
+.app-update-notice {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border: 1px solid #a8d9c9;
+  border-radius: 8px;
+  background: #f0fbf7;
+  color: #0f5c46;
+  box-shadow: var(--shadow);
+  transform: translateX(-50%);
+}
+
+.app-update-notice button {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 .empty {
   padding: 28px;
   color: var(--muted);
@@ -1510,6 +1539,14 @@ tr:last-child td {
     bottom: 12px;
     left: 12px;
     max-width: none;
+  }
+
+  .app-update-notice {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    max-width: none;
+    transform: none;
   }
 
   .review-table {

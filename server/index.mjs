@@ -56,6 +56,7 @@ const storage = await createStorage();
 const attachmentStore = createAttachmentStore({ rootDir: process.env.ATTACHMENT_DIR || path.join(rootDir, "data/attachments") });
 const tronProvider = createTronProvider();
 const chainScheduler = startChainSyncScheduler({ storage, tronProvider });
+const appVersionFiles = ["index.html", "assets/app.js", "assets/styles.css"];
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -84,6 +85,14 @@ function sendCsv(res, filename, csv) {
     "Cache-Control": "no-store",
   });
   res.end(`\ufeff${csv}`);
+}
+
+async function getAppVersion() {
+  const stats = await Promise.all(appVersionFiles.map(async (file) => {
+    const fileStat = await stat(path.join(rootDir, file));
+    return `${file}:${fileStat.size}:${Math.trunc(fileStat.mtimeMs)}`;
+  }));
+  return stats.join("|");
 }
 
 async function readJsonBody(req) {
@@ -125,6 +134,11 @@ async function handleApi(req, res, pathname) {
       nodeEnv,
       productionMode,
     });
+    return;
+  }
+
+  if (pathname === "/api/app-version" && req.method === "GET") {
+    respond(200, { version: await getAppVersion() });
     return;
   }
 
