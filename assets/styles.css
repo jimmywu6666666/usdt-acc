@@ -972,6 +972,15 @@ tr:last-child td {
   white-space: nowrap;
 }
 
+.wallet-list-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.wallet-list-panel .wallet-balance-wrap {
+  flex: 1;
+}
+
 .wallet-cell-head {
   display: flex;
   align-items: center;
@@ -993,6 +1002,18 @@ tr:last-child td {
 
 .wallet-cell-actions {
   margin-top: 8px;
+}
+
+@media (min-width: 681px) {
+  .wallet-list-panel .wallet-balance-wrap {
+    min-height: 360px;
+  }
+
+  .wallet-list-panel .wallet-balance-table th,
+  .wallet-list-panel .wallet-balance-table td {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
 }
 
 .balance-change {
