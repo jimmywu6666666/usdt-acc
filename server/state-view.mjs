@@ -1,5 +1,5 @@
 import { publicUser } from "./auth.mjs";
-import { isAdminAuditLog, isRoutineAuditLog } from "./domain.mjs";
+import { isRoutineAuditLog } from "./domain.mjs";
 
 export function stateForUser(state, user) {
   const safeState = structuredClone(state);
@@ -17,11 +17,11 @@ export function stateForUser(state, user) {
   }
 
   const tenantId = user.tenantId;
+  const adminUserIds = new Set(safeState.users.filter((item) => item.role === "admin").map((item) => item.id));
   const tenantUsers = safeState.users.filter((item) => (
     item.tenantId === tenantId
     && (user.role !== "employee" || user.canViewAll || item.id === user.id || item.role === "supervisor")
   ));
-  const administrators = safeState.users.filter((item) => item.role === "admin");
   safeState.activeTenantId = tenantId;
   safeState.activeUserId = user.id;
   safeState.tenants = safeState.tenants.filter((item) => item.id === tenantId);
@@ -37,7 +37,7 @@ export function stateForUser(state, user) {
   safeState.systemSettings = {
     walletEnabledLimit: Number(safeState.systemSettings?.walletEnabledLimit || 0),
   };
-  safeState.users = [...administrators, ...tenantUsers];
+  safeState.users = tenantUsers;
   safeState.wallets = safeState.wallets.filter((item) => item.tenantId === tenantId);
   safeState.walletBalanceSnapshots = (safeState.walletBalanceSnapshots || []).filter((item) => item.tenantId === tenantId);
   safeState.receivablePayables = (safeState.receivablePayables || []).filter((item) => item.tenantId === tenantId);
@@ -73,7 +73,7 @@ export function stateForUser(state, user) {
 
   safeState.auditLogs = safeState.auditLogs.filter((item) => (
     item.tenantId === tenantId
-    && !isAdminAuditLog(safeState, item)
+    && !adminUserIds.has(item.userId)
     && !isRoutineAuditLog(item)
     && (user.role !== "employee" || item.userId === user.id)
   ));

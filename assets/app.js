@@ -2489,7 +2489,7 @@
         appEnv: payload.appEnv || "development",
         productionMode: payload.productionMode === true,
       };
-      return payload.users || [];
+      return payload.hasAccounts ? (payload.users?.length ? payload.users : [{ id: "existing" }]) : [];
     } catch {
       return [];
     }

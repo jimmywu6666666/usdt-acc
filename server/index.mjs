@@ -192,7 +192,14 @@ async function handleApi(req, res, pathname) {
 
   if (pathname === "/api/auth/accounts" && req.method === "GET") {
     const state = await storage.readState();
-    respond(200, { users: state ? state.users.map(publicUser) : [], appEnv, nodeEnv, productionMode });
+    const hasAccounts = Boolean(state?.users?.length);
+    respond(200, {
+      hasAccounts,
+      users: productionMode || !state ? [] : state.users.map(publicUser),
+      appEnv,
+      nodeEnv,
+      productionMode,
+    });
     return;
   }
 
@@ -261,6 +268,11 @@ async function handleApi(req, res, pathname) {
   }
 
   if (pathname === "/api/state" && req.method === "PUT") {
+    if (productionMode) {
+      const error = new Error("生产环境禁止从前端初始化系统状态");
+      error.statusCode = 403;
+      throw error;
+    }
     const body = await readJsonBody(req);
     const existingState = await storage.readState();
     if (existingState) {

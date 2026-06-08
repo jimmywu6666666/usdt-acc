@@ -84,6 +84,7 @@ test("supervisors only receive their tenant data", () => {
   assert.equal(view.users.some((item) => "passwordHash" in item), false);
   assert.equal("storageKey" in view.annotations[0].attachment, false);
   assert.deepEqual(view.platformPayments.map((item) => item.id), ["pay_a"]);
+  assert.equal(view.users.some((item) => item.role === "admin"), false);
   assert.equal("fromAddress" in view.platformPayments[0], false);
   assert.equal("toAddress" in view.platformPayments[0], false);
   assert.equal("processedBy" in view.platformPayments[0], false);
@@ -105,6 +106,7 @@ test("limited employees receive unannotated work and their own records only", ()
   assert.deepEqual(view.annotations.map((item) => item.id), ["annotation_own"]);
   assert.deepEqual(view.auditLogs.map((item) => item.id), ["own_log"]);
   assert.deepEqual(view.platformPayments, []);
+  assert.equal(view.users.some((item) => item.role === "admin"), false);
   assert.equal(view.users.some((item) => item.id === "emp_b"), false);
   assert.equal(view.users.some((item) => item.id === "sup_b"), false);
 });
