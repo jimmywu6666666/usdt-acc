@@ -1964,6 +1964,7 @@
       title: "提交批注修正",
       desc: "修正会生成新的待审核版本，主管通过前原批注继续有效。",
       body: `
+        ${renderAnnotationTxSummary(tx)}
         <label>修正分类
           <select name="category" required>
             ${categoryOptions.map((category) => `<option value="${escapeHtml(category)}" ${category === annotation.category ? "selected" : ""}>${escapeHtml(category)}</option>`).join("")}
@@ -1987,10 +1988,14 @@
   }
 
   function reverseAnnotation(annotationId) {
+    const annotation = state.annotations.find((item) => item.id === annotationId);
+    const tx = state.chainTransactions.find((item) => item.id === annotation?.chainTxId);
+    if (!annotation || !tx) return;
     const overlay = createFormModal({
       title: "提交批注冲正",
       desc: "冲正审核通过后，该流水不再计入业务收支统计。",
       body: `
+        ${renderAnnotationTxSummary(tx)}
         <label>冲正原因
           <textarea name="reason" required placeholder="说明为什么需要冲正"></textarea>
         </label>
@@ -2450,13 +2455,17 @@
 
   function openDetailViewer({ tx, pairedTx, annotations, logs }) {
     const wallet = state.wallets.find((item) => item.id === tx.walletId);
+    const direction = transactionDirection(tx);
+    const transferText = pairedTx
+      ? `已配对内部划转：${tx.id} / ${pairedTx.id}`
+      : tx.internalTransferStatus === "pending" ? "另一侧钱包流水待同步" : "";
     const overlay = document.createElement("div");
     overlay.className = "detail-viewer";
     overlay.innerHTML = `
       <section class="detail-dialog" role="dialog" aria-modal="true" aria-label="流水详情">
         <div class="detail-head">
           <div>
-            <h3>${typeMap[transactionDirection(tx)]} ${money(tx.amount)} USDT</h3>
+            <h3>${directionPill(direction)} <span class="amount-${direction}">${money(tx.amount)} USDT</span></h3>
             <p>${formatDate(tx.chainTime)} · ${escapeHtml(wallet?.alias || "-")}</p>
           </div>
           <button class="btn pagination-icon" type="button" data-detail-close aria-label="关闭详情">×</button>
@@ -2464,13 +2473,10 @@
         <div class="detail-body">
           <section class="detail-section">
             <h4>链上流水</h4>
-            <dl class="detail-grid">
-              <div><dt>方向</dt><dd>${typeMap[transactionDirection(tx)]}</dd></div>
-              <div><dt>金额</dt><dd>${money(tx.amount)} USDT</dd></div>
-              <div><dt>钱包</dt><dd>${escapeHtml(wallet?.alias || "-")}</dd></div>
+            ${renderAnnotationTxSummary(tx)}
+            <dl class="detail-chain-extra">
               <div><dt>对方地址</dt><dd class="mono">${escapeHtml(tx.counterparty || "-")}</dd></div>
-              <div class="wide"><dt>交易哈希</dt><dd class="mono">${escapeHtml(tx.hash)}</dd></div>
-              ${pairedTx ? `<div class="wide"><dt>内部划转</dt><dd class="mono">${escapeHtml(tx.id)} / ${escapeHtml(pairedTx.id)}</dd></div>` : tx.internalTransferStatus === "pending" ? `<div class="wide"><dt>内部划转</dt><dd>另一侧钱包流水待同步</dd></div>` : ""}
+              ${transferText ? `<div><dt>内部划转</dt><dd class="mono">${escapeHtml(transferText)}</dd></div>` : ""}
             </dl>
           </section>
           <section class="detail-section">

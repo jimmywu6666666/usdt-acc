@@ -1869,6 +1869,32 @@ tr:last-child td {
   overflow-wrap: anywhere;
 }
 
+.detail-chain-extra {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 0;
+}
+
+.detail-chain-extra div {
+  padding: 9px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.detail-chain-extra dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.detail-chain-extra dd {
+  min-width: 0;
+  margin: 5px 0 0;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
 .detail-list,
 .detail-log-list {
   display: grid;
