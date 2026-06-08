@@ -1212,6 +1212,24 @@ tr:last-child td {
   word-break: break-all;
 }
 
+.copy-hash {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 2px 4px;
+  border-radius: 5px;
+  background: transparent;
+  color: #2563eb;
+  text-align: left;
+  word-break: break-all;
+}
+
+.copy-hash:hover,
+.copy-hash:focus-visible {
+  background: #eff6ff;
+  color: #1d4ed8;
+  outline: none;
+}
+
 .help-doc {
   display: grid;
   gap: 18px;
@@ -2406,13 +2424,20 @@ tr:last-child td {
   background: #fff;
 }
 
-.annotation-modal-summary .hash strong {
+.annotation-modal-summary .hash .copy-hash {
   padding: 7px 8px;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
   background: #f8fafc;
   color: #334155;
   font-size: 13px;
+}
+
+.annotation-modal-summary .hash .copy-hash:hover,
+.annotation-modal-summary .hash .copy-hash:focus-visible {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .empty.slim {

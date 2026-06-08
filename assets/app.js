@@ -322,6 +322,40 @@
     toastTimer = setTimeout(() => el.remove(), 2800);
   }
 
+  async function copyText(text) {
+    const value = String(text || "").trim();
+    if (!value) return false;
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch {
+      const input = document.createElement("textarea");
+      input.value = value;
+      input.setAttribute("readonly", "");
+      input.style.position = "fixed";
+      input.style.left = "-9999px";
+      input.style.top = "0";
+      document.body.appendChild(input);
+      input.focus({ preventScroll: true });
+      input.select();
+      input.setSelectionRange(0, value.length);
+      const copied = document.execCommand("copy");
+      input.remove();
+      return copied;
+    }
+  }
+
+  function bindGlobalCopyHash() {
+    document.addEventListener("click", async (event) => {
+      const target = event.target.closest("[data-copy-hash]");
+      if (!target) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const ok = await copyText(target.dataset.copyHash);
+      toast(ok ? "交易哈希已复制" : "复制失败，请手动复制");
+    });
+  }
+
   function startAppVersionCheck() {
     if (appVersionTimer) return;
     checkAppVersion();
@@ -537,6 +571,17 @@
   function shortHash(hash) {
     const value = String(hash || "");
     return value.length > 14 ? `${value.slice(0, 8)}...${value.slice(-6)}` : value || "-";
+  }
+
+  function isLikelyTransactionHash(value) {
+    return /^[a-f0-9]{64}$/i.test(String(value || "").trim());
+  }
+
+  function renderCopyHash(hash, { short = false } = {}) {
+    const value = String(hash || "").trim();
+    if (!value) return "-";
+    const text = short ? shortHash(value) : value;
+    return `<button class="copy-hash mono" type="button" data-copy-hash="${escapeHtml(value)}" title="点击复制交易哈希">${escapeHtml(text)}</button>`;
   }
 
   function subscriptionDurationText(item) {
@@ -1061,7 +1106,7 @@
       <div class="summary-item"><span>方向</span><strong>${directionPill(direction)}</strong></div>
       <div class="summary-item highlight amount"><span>金额</span><strong class="amount-${direction}">${money(tx.amount)} USDT</strong></div>
       <div class="summary-item"><span>钱包</span><strong><span class="summary-wallet">${escapeHtml(transactionWalletText(tx))}</span></strong></div>
-      <div class="summary-item wide hash"><span>交易哈希</span><strong class="mono">${escapeHtml(tx.hash)}</strong></div>
+      <div class="summary-item wide hash"><span>交易哈希</span>${renderCopyHash(tx.hash)}</div>
     </section>`;
   }
 
@@ -1175,7 +1220,7 @@
           <div><dt>钱包</dt><dd><span class="review-meta-tag wallet">${escapeHtml(transactionWalletText(tx))}</span></dd></div>
           <div><dt>提交人</dt><dd><span class="review-meta-tag annotator">${escapeHtml(userName(settlement.submittedBy))}</span></dd></div>
           <div><dt>平账结果</dt><dd>${over > 0 ? `${item.type === "receivable" ? "多收" : "多付"} ${money(over)} USDT` : "不超额"}</dd></div>
-          <div class="wide"><dt>交易哈希</dt><dd class="mono">${escapeHtml(tx.hash)}</dd></div>
+          <div class="wide"><dt>交易哈希</dt><dd>${renderCopyHash(tx.hash)}</dd></div>
         </dl>
         <div class="actions">${showReviewActions ? `<button class="btn success" data-rps-review="${settlement.id}" data-action="approve">审核通过</button><button class="btn danger" data-rps-review="${settlement.id}" data-action="reject">驳回</button>` : ""}<button class="btn" data-rp-detail="${item.id}">详情</button></div>
       </article>`;
@@ -1500,7 +1545,7 @@
       <td>${formatDate(tenant.subscriptionExpiresAt)}</td>
       <td>${tenant.enabled ? badge({ on: ["启用", "green"] }, "on") : badge({ off: ["停用", "red"] }, "off")}</td>
       <td>${subscriptionStatusText(tenant)}</td>
-      <td>${tenant.lastPaymentTxHash ? `<span class="mono">${escapeHtml(shortHash(tenant.lastPaymentTxHash))}</span>` : "-"}</td>
+      <td>${tenant.lastPaymentTxHash ? renderCopyHash(tenant.lastPaymentTxHash, { short: true }) : "-"}</td>
       <td><button class="btn small primary" data-tenant-manual-renew="${tenant.id}">手工续费</button></td>
     </tr>`).join("");
     return `<div class="table-wrap"><table>
@@ -1518,7 +1563,7 @@
         <td class="amount-income">${money(payment.amount)}</td>
         <td>${badge(platformPaymentStatusMap(), payment.status)}</td>
         <td>${escapeHtml(tenantName(payment.tenantId))}</td>
-        <td class="mono">${escapeHtml(shortHash(payment.hash))}</td>
+        <td>${renderCopyHash(payment.hash, { short: true })}</td>
         <td>${escapeHtml(payment.reason || payment.memo || "-")}</td>
         <td>${canManual ? `<button class="btn small primary" data-manual-renew="${payment.id}">手工续费</button>` : subscriptionDurationText(payment)}</td>
       </tr>`;
@@ -1539,7 +1584,7 @@
       <td>${formatDate(payment.chainTime || payment.createdAt)}</td>
       <td class="amount-income">${money(payment.amount)}</td>
       <td>${badge(platformPaymentStatusMap(), payment.status)}</td>
-      <td class="mono">${escapeHtml(shortHash(payment.hash))}</td>
+      <td>${renderCopyHash(payment.hash, { short: true })}</td>
       <td>${subscriptionDurationText(payment)}</td>
       <td>${escapeHtml(payment.reason || "-")}</td>
     </tr>`).join("");
@@ -2802,7 +2847,7 @@
       <dl class="detail-grid compact">
         <div><dt>提交人</dt><dd>${escapeHtml(userName(settlement.submittedBy))}</dd></div>
         <div><dt>提交时间</dt><dd>${formatDate(settlement.submittedAt)}</dd></div>
-        <div class="wide"><dt>链上流水</dt><dd>${tx ? `${formatDate(tx.chainTime)} · ${transactionWalletText(tx)} · ${shortHash(tx.hash)}` : "-"}</dd></div>
+        <div class="wide"><dt>链上流水</dt><dd>${tx ? `${formatDate(tx.chainTime)} · ${transactionWalletText(tx)} · ${renderCopyHash(tx.hash, { short: true })}` : "-"}</dd></div>
         ${settlement.status === "pending" && canReview() ? `<div class="wide actions"><button class="btn success" data-rps-review="${settlement.id}" data-action="approve">审核通过</button><button class="btn danger" data-rps-review="${settlement.id}" data-action="reject">驳回</button></div>` : ""}
         ${settlement.rejectionReason ? `<div class="wide"><dt>驳回原因</dt><dd>${escapeHtml(settlement.rejectionReason)}</dd></div>` : ""}
       </dl>
@@ -2857,7 +2902,7 @@
         ${payment ? `<section class="annotation-modal-summary">
           <div><span>收款金额</span><strong>${money(payment.amount)} USDT</strong></div>
           <div><span>当前状态</span><strong>${badge(platformPaymentStatusMap(), payment.status)}</strong></div>
-          <div class="wide"><span>交易哈希</span><strong class="mono">${escapeHtml(payment.hash || "-")}</strong></div>
+          <div class="wide"><span>交易哈希</span><strong>${renderCopyHash(payment.hash)}</strong></div>
         </section>` : ""}
         <label>续费租户
           <select name="tenantId" ${fixedTenantId ? "disabled" : ""}>${tenantOptions}</select>
@@ -3031,8 +3076,8 @@
       if (payload.state) state = payload.state;
       const result = payload.results?.[0] || (Array.isArray(payload.externalResult) ? payload.externalResult[0] : null);
       box.innerHTML = result
-        ? `<div class="card" style="margin-top:12px"><div class="card-label">查询结果</div><div class="card-value">${money(result.amount)} USDT</div><div class="card-foot">${formatDate(result.chainTime)} · ${result.direction === "income" ? "转入" : "转出"} · ${result.confirmed ? "已确认" : "未确认"}</div><p class="mono">${result.hash}</p></div>`
-        : `<div class="card" style="margin-top:12px"><div class="card-label">未查询到记录</div><div class="card-foot">${payload.configured ? "TRON 链上及本地同步记录均未发现该交易。" : `当前未配置 TRON API：${payload.reason || "请设置 TRON_API_KEY"}`}</div><p class="mono">${query}</p></div>`;
+        ? `<div class="card" style="margin-top:12px"><div class="card-label">查询结果</div><div class="card-value">${money(result.amount)} USDT</div><div class="card-foot">${formatDate(result.chainTime)} · ${result.direction === "income" ? "转入" : "转出"} · ${result.confirmed ? "已确认" : "未确认"}</div><p>${renderCopyHash(result.hash)}</p></div>`
+        : `<div class="card" style="margin-top:12px"><div class="card-label">未查询到记录</div><div class="card-foot">${payload.configured ? "TRON 链上及本地同步记录均未发现该交易。" : `当前未配置 TRON API：${payload.reason || "请设置 TRON_API_KEY"}`}</div><p class="mono">${isLikelyTransactionHash(query) ? renderCopyHash(query) : escapeHtml(query)}</p></div>`;
     } catch (error) {
       box.innerHTML = `<div class="card" style="margin-top:12px"><div class="card-label">查询失败</div><div class="card-foot">${error.message}</div></div>`;
     }
@@ -3379,6 +3424,7 @@
   }
 
   async function init() {
+    bindGlobalCopyHash();
     startAppVersionCheck();
     await ensureInitialState();
     state = await load();
