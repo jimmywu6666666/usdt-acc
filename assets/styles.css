@@ -508,6 +508,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 12px;
 }
@@ -515,6 +516,10 @@ button {
 .panel-title h3 {
   margin: 0;
   font-size: 16px;
+}
+
+.panel-title span {
+  min-width: 0;
 }
 
 .form-grid {
@@ -1082,17 +1087,22 @@ tr:last-child td {
 
 .filters {
   display: grid;
-  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
   gap: 10px;
   margin-bottom: 12px;
+  min-width: 0;
 }
 
 .filters .actions {
   align-self: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 0;
 }
 
 .filters .actions .btn {
+  flex: 1 1 88px;
   height: 42px;
 }
 
