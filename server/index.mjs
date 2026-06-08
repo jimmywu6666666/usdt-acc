@@ -34,6 +34,7 @@ import {
   reconcileState,
   requestAnnotationCorrection,
   requestAnnotationReversal,
+  revokeReceivableSettlement,
   restoreNonBusinessTransaction,
   resubmitAnnotation,
   resetUserPassword,
@@ -527,6 +528,23 @@ async function handleApi(req, res, pathname) {
         itemId: receivableSettlement[1],
         txId: body.txId,
         note: body.note,
+        attachment: body.attachment,
+      });
+      return current;
+    });
+    respond(200, { ok: true, state });
+    return;
+  }
+
+  const settlementRevoke = pathname.match(/^\/api\/receivable-settlements\/([^/]+)\/revoke$/);
+  if (settlementRevoke && req.method === "POST") {
+    const body = await readJsonBody(req);
+    const state = await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      revokeReceivableSettlement(current, {
+        user,
+        settlementId: settlementRevoke[1],
+        reason: body.reason,
       });
       return current;
     });

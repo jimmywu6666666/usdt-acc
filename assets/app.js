@@ -32,6 +32,10 @@
     reversal: ["已冲正", "gray"],
     non_business: ["非业务流水", "gray"],
     restored: ["已恢复待批注", "orange"],
+    settlement_pending: ["平账待审核", "amber"],
+    settlement_approved: ["平账已通过", "green"],
+    settlement_rejected: ["平账已驳回", "red"],
+    settlement_revoked: ["平账已撤销", "gray"],
     historical: ["历史无需批注", "gray"],
     transfer_pending: ["内部划转待确认", "amber"],
   };
@@ -537,6 +541,7 @@
       && tenantBusinessActive()
       && tx.transactionType !== "transfer"
       && tx.internalTransferStatus !== "pending"
+      && !currentAnnotation(tx)
       && isManagedTransaction(tx)
       && !isTxUsedForReceivable(tx.id)
       && receivablesForTransaction(tx).length > 0;
@@ -564,6 +569,7 @@
 
   function displayStatus(annotation) {
     if (!annotation) return "unannotated";
+    if (annotation.settlementId) return `settlement_${annotation.status}`;
     if (annotation.status === "approved" && annotation.correctionType === "reversal") return "reversal";
     return annotation.status;
   }
@@ -577,14 +583,18 @@
   function compareTransactionRows(left, right) {
     const priority = {
       rejected: 0,
+      settlement_rejected: 0,
       unannotated: 1,
       pending: 2,
+      settlement_pending: 2,
       transfer_pending: 3,
       approved: 4,
+      settlement_approved: 4,
       reversal: 5,
       non_business: 6,
       corrected: 6,
       reversed: 6,
+      settlement_revoked: 6,
       restored: 7,
       historical: 7,
     };
@@ -877,7 +887,7 @@
     const approved = rows.filter(({ tx, annotation }) => isManagedTransaction(tx) && tx.transactionType !== "transfer" && annotation?.status === "approved" && annotation.correctionType !== "reversal");
     const actual = rows.filter(({ tx }) => isManagedTransaction(tx) && tx.transactionType !== "transfer");
     const periods = dashboardPeriods();
-    const pending = rows.filter(({ annotation }) => annotation?.status === "pending").length;
+    const pending = rows.filter(({ annotation }) => annotation?.status === "pending" && !annotation.settlementId).length;
     const unannotated = rows.filter(({ tx, annotation }) => (
       isManagedTransaction(tx) && tx.internalTransferStatus !== "pending" && !annotation
     )).length;
@@ -888,7 +898,7 @@
     return `
       ${pageHead("资金概况", "汇总业务已审核数据、钱包实际流水、链上余额变化和往来款概况")}
       ${syncErrors.length ? `<div class="notice danger">链上同步异常：${syncErrors.map((wallet) => `${wallet.alias}（${wallet.lastSyncError}）`).join("；")}</div>` : ""}
-      <div class="section-label"><h3>业务已审核</h3><span>只统计已审核通过的业务批注</span></div>
+      <div class="section-label"><h3>业务已审核</h3><span>统计已通过的普通批注和平账业务</span></div>
       <section class="dashboard-business-block">
         <div class="grid stats">
           ${periods.map((period) => {
@@ -1094,7 +1104,7 @@
         <label>开始日期<input type="date" name="from" value="${escapeHtml(entryFilters.from)}"></label>
         <label>结束日期<input type="date" name="to" value="${escapeHtml(entryFilters.to)}"></label>
         <label>方向<select name="direction"><option value="">全部</option><option value="income" ${selectedFilter("direction", "income")}>进账</option><option value="expense" ${selectedFilter("direction", "expense")}>出账</option><option value="transfer" ${selectedFilter("direction", "transfer")}>内部划转</option></select></label>
-        <label>批注状态<select name="status"><option value="">全部</option><option value="unannotated" ${selectedFilter("status", "unannotated")}>待批注</option><option value="non_business" ${selectedFilter("status", "non_business")}>非业务流水</option><option value="transfer_pending" ${selectedFilter("status", "transfer_pending")}>内部划转待确认</option><option value="historical" ${selectedFilter("status", "historical")}>历史无需批注</option><option value="pending" ${selectedFilter("status", "pending")}>待审核</option><option value="approved" ${selectedFilter("status", "approved")}>已通过</option><option value="rejected" ${selectedFilter("status", "rejected")}>已驳回</option><option value="reversal" ${selectedFilter("status", "reversal")}>已冲正</option></select></label>
+        <label>批注状态<select name="status"><option value="">全部</option><option value="unannotated" ${selectedFilter("status", "unannotated")}>待批注</option><option value="non_business" ${selectedFilter("status", "non_business")}>非业务流水</option><option value="transfer_pending" ${selectedFilter("status", "transfer_pending")}>内部划转待确认</option><option value="historical" ${selectedFilter("status", "historical")}>历史无需批注</option><option value="pending" ${selectedFilter("status", "pending")}>待审核</option><option value="settlement_pending" ${selectedFilter("status", "settlement_pending")}>平账待审核</option><option value="approved" ${selectedFilter("status", "approved")}>已通过</option><option value="settlement_approved" ${selectedFilter("status", "settlement_approved")}>平账已通过</option><option value="rejected" ${selectedFilter("status", "rejected")}>已驳回</option><option value="settlement_rejected" ${selectedFilter("status", "settlement_rejected")}>平账已驳回</option><option value="reversal" ${selectedFilter("status", "reversal")}>已冲正</option><option value="settlement_revoked" ${selectedFilter("status", "settlement_revoked")}>平账已撤销</option></select></label>
         <label>钱包<select name="walletId"><option value="">全部</option>${tenantWallets().map((wallet) => `<option value="${wallet.id}" ${selectedFilter("walletId", wallet.id)}>${wallet.alias}</option>`).join("")}</select></label>
         <label>最小金额<input type="number" name="minAmount" step="0.01" value="${escapeHtml(entryFilters.minAmount)}"></label>
         <label>最大金额<input type="number" name="maxAmount" step="0.01" value="${escapeHtml(entryFilters.maxAmount)}"></label>
@@ -1209,7 +1219,8 @@
     if (businessActive && !annotation && isManagedTransaction(tx) && tx.internalTransferStatus !== "pending" && canManageNonBusiness()) actions.push(`<button class="btn warn" data-non-business="${tx.id}">非业务</button>`);
     if (businessActive && annotation?.status === "non_business" && canManageNonBusiness()) actions.push(`<button class="btn" data-restore-non-business="${annotation.id}">恢复待批注</button>`);
     if (businessActive && annotation?.status === "rejected" && canEditAnnotation(annotation)) actions.push(`<button class="btn primary" data-resubmit="${annotation.id}">修改重提</button>`);
-    if (businessActive && annotation?.status === "approved" && annotation.correctionType !== "reversal" && canEditAnnotation(annotation)) {
+    if (businessActive && annotation?.settlementId && annotation.status === "approved" && canManageNonBusiness()) actions.push(`<button class="btn danger" data-rps-revoke="${annotation.settlementId}">撤销平账</button>`);
+    if (businessActive && annotation?.status === "approved" && !annotation.settlementId && annotation.correctionType !== "reversal" && canEditAnnotation(annotation)) {
       actions.push(`<button class="btn warn" data-correct="${annotation.id}">修正</button>`);
       actions.push(`<button class="btn danger" data-reverse="${annotation.id}">冲正</button>`);
     }
@@ -1268,7 +1279,7 @@
   }
 
   function renderReview() {
-    const pending = state.annotations.filter((annotation) => annotation.tenantId === visibleTenantId() && annotation.status === "pending");
+    const pending = state.annotations.filter((annotation) => annotation.tenantId === visibleTenantId() && annotation.status === "pending" && !annotation.settlementId);
     const pendingReceivables = tenantReceivables().filter((item) => item.reviewStatus === "pending");
     const pendingSettlements = tenantSettlements().filter((settlement) => settlement.status === "pending");
     const showActions = canReview() && tenantBusinessActive();
@@ -1340,6 +1351,7 @@
           <div><dt>钱包</dt><dd><span class="review-meta-tag wallet">${escapeHtml(transactionWalletText(tx))}</span></dd></div>
           <div><dt>提交人</dt><dd><span class="review-meta-tag annotator">${escapeHtml(userName(settlement.submittedBy))}</span></dd></div>
           <div><dt>平账结果</dt><dd>${over > 0 ? `${item.type === "receivable" ? "多收" : "多付"} ${money(over)} USDT` : "不超额"}</dd></div>
+          <div><dt>凭证</dt><dd>${settlement.attachmentName ? `<button class="attachment-link" data-settlement-attachment="${settlement.id}">${escapeHtml(settlement.attachmentName)}</button>` : "无凭证"}</dd></div>
           <div class="wide"><dt>交易哈希</dt><dd>${renderCopyHash(tx.hash)}</dd></div>
         </dl>
         <div class="actions">${showReviewActions ? `<button class="btn success" data-rps-review="${settlement.id}" data-action="approve">审核通过</button><button class="btn danger" data-rps-review="${settlement.id}" data-action="reject">驳回</button>` : ""}<button class="btn" data-rp-detail="${item.id}">详情</button></div>
@@ -2359,7 +2371,7 @@
         ])}
         ${helpSection("二、总览", [
           "总览用于查看本系统现金流概况，包括业务已审核、待处理业务、钱包实际流水、往来款概况、链上钱包余额和最近流水。",
-          "正式业务统计以已通过的批注为准，待审核或已驳回的记录不会直接计入正式业务统计。",
+          "正式业务统计以已通过的普通批注和平账业务为准，待审核或已驳回的记录不会直接计入正式业务统计。",
           "钱包实际流水按链上进出统计，不区分是否已批注或审核，适合和业务已审核数据进行对比。",
           "往来款概况用于查看应收、应付、已平、未平、多收和多付情况。",
           "链上钱包余额显示当前链上余额以及今日、本月余额变化，便于核对钱包实际现金流。",
@@ -2368,7 +2380,7 @@
           "流水账目用于查看已经同步到系统里的 TRC20 USDT 链上流水。",
           "待批注表示链上已有流水但还没有补充业务信息。",
           "待审核表示已经提交批注，等待主管审核。",
-          "已通过表示主管审核通过，计入业务统计。",
+          "已通过表示主管审核通过，计入业务统计；平账已通过也会计入业务统计。",
           "已驳回表示主管退回，员工可以修改后重新提交。",
           "已被修正表示已有新的修正版本通过，原版本保留但不再作为当前有效版本。",
           "已被冲正表示该流水保留历史，但不再计入业务收支。",
@@ -2392,7 +2404,7 @@
           "驳回时必须填写原因，员工修改后可重新提交。",
           "已通过记录需要调整时，主管可发起修正或冲正。",
           "修正用于分类、说明、凭证等内容需要调整的情况；修正通过后新版本生效。",
-          "冲正用于该笔不应继续计入业务收支的情况；冲正通过后链上流水仍保留，但不再计入业务统计。",
+          "冲正用于该笔不应继续计入业务收支或需要重新处理的情况；冲正通过后链上流水恢复为待处理，可重新批注、重新平账或标记非业务。",
         ])}
         ${helpSection("六、往来款管理", [
           "往来款管理用于记录和查看应收款、应付款。",
@@ -2401,12 +2413,13 @@
           "提交往来款时可上传或粘贴凭证图片，方便主管审核业务来源和金额依据。",
           "平账从流水账目发起：先找到实际收款或付款的链上流水，再选择对应的应收款或应付款。",
           "进账流水只能平应收款，出账流水只能平应付款。",
-          "链上流水只要在钱包纳入管理时间之后即可用于平账，不要求先完成批注审核。",
+          "链上流水用于平账前必须没有当前有效批注；已经普通批注的流水需要先冲正恢复待处理后，才能重新平账。",
           "纳入管理时间之前的历史无需批注流水不能用于平账。",
           "一笔链上流水只能绑定一笔往来款，且必须整笔用于平账，不能拆分或部分平账。",
           "一笔往来款可以通过多笔链上流水分多次平账。",
           "如果实际收付金额超过往来款金额，系统会显示多收或多付金额。",
-          "员工提交平账后由主管审核，主管自己提交的平账直接确认。",
+          "平账也需要上传或粘贴凭证；平账通过后会生成平应收款或平应付款业务记录，并计入业务统计。",
+          "员工提交平账后由主管审核，主管自己提交的平账直接确认；已通过平账如有错误，可由主管撤销，撤销后流水恢复待处理。",
         ])}
         ${helpSection("七、钱包管理", [
           "主管可新增 TRC20 USDT 钱包、设置钱包纳入管理起始时间、查看链上余额和同步状态、停用或启用钱包、手动触发链上同步。",
@@ -2750,7 +2763,9 @@
     document.querySelectorAll("[data-rp-detail]").forEach((button) => button.addEventListener("click", () => openReceivableDetail(button.dataset.rpDetail)));
     document.querySelectorAll("[data-rp-void]").forEach((button) => button.addEventListener("click", () => voidReceivable(button.dataset.rpVoid)));
     document.querySelectorAll("[data-rp-attachment]").forEach((button) => button.addEventListener("click", () => previewReceivableAttachment(button.dataset.rpAttachment)));
+    document.querySelectorAll("[data-settlement-attachment]").forEach((button) => button.addEventListener("click", () => previewSettlementAttachment(button.dataset.settlementAttachment)));
     document.querySelectorAll("[data-rps-review]").forEach((button) => button.addEventListener("click", () => reviewReceivableSettlement(button.dataset.rpsReview, button.dataset.action)));
+    document.querySelectorAll("[data-rps-revoke]").forEach((button) => button.addEventListener("click", () => revokeReceivableSettlement(button.dataset.rpsRevoke)));
     document.querySelectorAll("[data-manual-renew]").forEach((button) => button.addEventListener("click", () => manualRenewPayment(button.dataset.manualRenew)));
     document.querySelectorAll("[data-tenant-manual-renew]").forEach((button) => button.addEventListener("click", () => manualRenewTenant(button.dataset.tenantManualRenew)));
     document.querySelector("#categoryForm")?.addEventListener("submit", submitCategory);
@@ -3114,7 +3129,9 @@
     });
     document.body.append(overlay);
     overlay.querySelectorAll("[data-rp-attachment]").forEach((button) => button.addEventListener("click", () => previewReceivableAttachment(button.dataset.rpAttachment)));
+    overlay.querySelectorAll("[data-settlement-attachment]").forEach((button) => button.addEventListener("click", () => previewSettlementAttachment(button.dataset.settlementAttachment)));
     overlay.querySelectorAll("[data-rps-review]").forEach((button) => button.addEventListener("click", () => reviewReceivableSettlement(button.dataset.rpsReview, button.dataset.action)));
+    overlay.querySelectorAll("[data-rps-revoke]").forEach((button) => button.addEventListener("click", () => revokeReceivableSettlement(button.dataset.rpsRevoke)));
   }
 
   function markNonBusiness(txId) {
@@ -3485,14 +3502,16 @@
         </label>
         <div data-rp-preview>${preview}</div>
         <label><span class="field-label">平账说明 <em class="optional-mark">选填</em></span><textarea name="note" placeholder="可填写本次平账说明"></textarea></label>
+        ${renderProofUploadField("settlementProofFile")}
       `,
       submitText: "提交平账",
       confirmMessage: `确认提交这条${typeText}平账？`,
       onSubmit: async (formData, close) => {
         const itemId = formData.get("itemId");
         if (!itemId) throw new Error(`请选择需要平账的${typeText}`);
+        const attachment = await readUpload(formData.get("attachmentFile"));
         await apiMutate(`/api/receivable-payables/${encodeURIComponent(itemId)}/settlements`, {
-          body: { txId: tx.id, note: formData.get("note") },
+          body: { txId: tx.id, note: formData.get("note"), attachment },
         });
         close();
         render();
@@ -3500,6 +3519,7 @@
       },
     });
     document.body.append(overlay);
+    bindProofUpload(overlay);
     overlay.querySelector("[data-rp-item]")?.addEventListener("change", (event) => {
       const item = items.find((entry) => entry.id === event.target.value);
       overlay.querySelector("[data-rp-preview]").innerHTML = item ? renderReceivableSettlementPreview(item, tx, false) : "";
@@ -3542,6 +3562,39 @@
     } catch (error) {
       toast(error.message);
     }
+  }
+
+  function revokeReceivableSettlement(settlementId) {
+    if (!tenantBusinessActive()) {
+      toast(tenantBusinessLockText());
+      return;
+    }
+    const settlement = tenantSettlements().find((entry) => entry.id === settlementId);
+    const item = settlement ? tenantReceivables().find((entry) => entry.id === settlement.itemId) : null;
+    const tx = settlement ? state.chainTransactions.find((entry) => entry.id === settlement.txId) : null;
+    if (!settlement || !item || !tx) return;
+    const overlay = createFormModal({
+      title: "撤销平账",
+      desc: "撤销后该链上流水会恢复为待处理，可重新批注、重新平账或标记非业务。",
+      body: `
+        ${renderAnnotationTxSummary(tx)}
+        <div class="notice danger">将撤销：${escapeHtml(item.counterparty)} · ${escapeHtml(item.category)} · ${money(settlement.amount)} USDT</div>
+        <label>撤销原因
+          <textarea name="reason" required placeholder="例如：误选往来款，实际应作为普通业务批注"></textarea>
+        </label>
+      `,
+      submitText: "确认撤销",
+      confirmMessage: "确认撤销这条平账？",
+      onSubmit: async (formData, close) => {
+        const reason = String(formData.get("reason") || "").trim();
+        if (!reason) throw new Error("请输入撤销原因");
+        await apiMutate(`/api/receivable-settlements/${encodeURIComponent(settlementId)}/revoke`, { body: { reason } });
+        close();
+        render();
+        toast("平账已撤销，流水已恢复待处理");
+      },
+    });
+    document.body.append(overlay);
   }
 
   function voidReceivable(itemId) {
@@ -3619,9 +3672,12 @@
       <dl class="detail-grid compact">
         <div><dt>提交人</dt><dd>${escapeHtml(userName(settlement.submittedBy))}</dd></div>
         <div><dt>提交时间</dt><dd>${formatDate(settlement.submittedAt)}</dd></div>
+        <div><dt>凭证</dt><dd>${settlement.attachmentName ? `<button class="attachment-link" data-settlement-attachment="${settlement.id}">${escapeHtml(settlement.attachmentName)}</button>` : "无凭证"}</dd></div>
         <div class="wide"><dt>链上流水</dt><dd>${tx ? `${formatDate(tx.chainTime)} · ${transactionWalletText(tx)} · ${renderCopyHash(tx.hash, { short: true })}` : "-"}</dd></div>
         ${settlement.status === "pending" && canReview() && tenantBusinessActive() ? `<div class="wide actions"><button class="btn success" data-rps-review="${settlement.id}" data-action="approve">审核通过</button><button class="btn danger" data-rps-review="${settlement.id}" data-action="reject">驳回</button></div>` : ""}
+        ${settlement.status === "approved" && canManageNonBusiness() && tenantBusinessActive() ? `<div class="wide actions"><button class="btn danger" data-rps-revoke="${settlement.id}">撤销平账</button></div>` : ""}
         ${settlement.rejectionReason ? `<div class="wide"><dt>驳回原因</dt><dd>${escapeHtml(settlement.rejectionReason)}</dd></div>` : ""}
+        ${settlement.revokeReason ? `<div class="wide"><dt>撤销原因</dt><dd>${escapeHtml(settlement.revokeReason)}</dd></div>` : ""}
       </dl>
     </article>`;
   }
@@ -4020,6 +4076,15 @@
     return previewProof(`/api/receivable-payables/${encodeURIComponent(itemId)}/attachment`);
   }
 
+  async function previewSettlementAttachment(settlementId) {
+    const settlement = (state.receivableSettlements || []).find((entry) => entry.id === settlementId);
+    if (!settlement?.annotationId) {
+      toast("该平账没有可查看的凭证");
+      return;
+    }
+    return previewAttachment(settlement.annotationId);
+  }
+
   async function previewTicketAttachment(ticketId, messageId) {
     if (!ticketId || !messageId) return;
     return previewProof(`/api/support-tickets/${encodeURIComponent(ticketId)}/messages/${encodeURIComponent(messageId)}/attachment`);
@@ -4122,6 +4187,10 @@
     state.platformPayments ||= [];
     state.receivablePayables ||= [];
     state.receivableSettlements ||= [];
+    state.receivableSettlements.forEach((settlement) => {
+      settlement.attachmentName ||= "";
+      settlement.attachment ||= null;
+    });
     state.supportTickets ||= [];
     state.subscriptionSettings ||= { monthlyFee: 100, firstOpenFee: 0, platformWalletAddress: "", enabled: false, autoDisable: true };
     state.subscriptionSettings.monthlyFee ||= 100;

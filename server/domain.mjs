@@ -97,6 +97,11 @@ export function migrateAnnotationState(state) {
   for (const tenant of state.tenants || []) {
     tenant.subscriptionStatus ||= tenant.subscriptionExpiresAt ? (new Date(tenant.subscriptionExpiresAt).getTime() >= Date.now() ? "active" : "expired") : "unset";
   }
+  for (const settlement of state.receivableSettlements || []) {
+    settlement.attachmentName ||= "";
+    settlement.attachment ||= null;
+    migrateSettlementAnnotation(state, settlement);
+  }
   for (const item of state.receivablePayables || []) {
     updateReceivablePayableStatus(state, item);
   }
@@ -228,6 +233,12 @@ export function reviewAnnotation(state, { user, annotationId, action, rejectionR
     annotation.rejectionReason = reason;
     annotation.reviewedBy = user.id;
     annotation.reviewedAt = now;
+    if (!annotation.previousAnnotationId && !annotation.settlementId) {
+      const tx = state.chainTransactions.find((item) => item.id === annotation.chainTxId);
+      if (tx) linkedTransferTransactions(state, tx).forEach((item) => {
+        if (item.currentAnnotationId === annotation.id) item.currentAnnotationId = null;
+      });
+    }
     appendLog(state, { tenantId: annotation.tenantId, userId: user.id, action: "驳回批注", target: annotation.id, createdAt: now });
     return annotation;
   }
@@ -244,7 +255,7 @@ export function reviewAnnotation(state, { user, annotationId, action, rejectionR
   }
   const tx = state.chainTransactions.find((item) => item.id === annotation.chainTxId);
   if (tx) linkedTransferTransactions(state, tx).forEach((item) => {
-    item.currentAnnotationId = annotation.id;
+    item.currentAnnotationId = annotation.correctionType === "reversal" ? null : annotation.id;
   });
   appendLog(state, {
     tenantId: annotation.tenantId,
@@ -439,7 +450,7 @@ export function reviewReceivablePayable(state, { user, itemId, action, rejection
   return updateReceivablePayableStatus(state, item);
 }
 
-export function createReceivableSettlement(state, { user, itemId, txId, note = "", now = new Date().toISOString() }) {
+export function createReceivableSettlement(state, { user, itemId, txId, note = "", attachment = null, now = new Date().toISOString() }) {
   reconcileState(state);
   const item = state.receivablePayables.find((entry) => entry.id === itemId);
   if (!item) throw notFound("往来款不存在");
@@ -452,13 +463,19 @@ export function createReceivableSettlement(state, { user, itemId, txId, note = "
   const tx = state.chainTransactions.find((entry) => entry.id === txId);
   if (!tx || tx.tenantId !== item.tenantId) throw notFound("链上流水不存在");
   if (!isManagedTransactionGroup(state, tx)) throw badRequest("历史无需批注流水不能用于平账");
+  if (!tx.confirmed) throw badRequest("链上交易尚未确认，暂时不能平账");
   const expectedDirection = item.type === "receivable" ? "income" : "expense";
   if (tx.direction !== expectedDirection || tx.transactionType === "transfer") {
     throw badRequest(item.type === "receivable" ? "应收款只能使用进账流水平账" : "应付款只能使用出账流水平账");
   }
+  const current = currentAnnotation(state, tx);
+  if (current) {
+    throw badRequest("该链上流水已有业务处理记录，不能直接平账");
+  }
   if (state.receivableSettlements.some((entry) => entry.txId === tx.id && !["rejected", "revoked"].includes(entry.status))) {
     throw badRequest("该链上流水已用于往来款平账");
   }
+  const settlementStatus = ["admin", "supervisor"].includes(user.role) ? "approved" : "pending";
   const settlement = {
     id: id("rps"),
     tenantId: item.tenantId,
@@ -466,17 +483,23 @@ export function createReceivableSettlement(state, { user, itemId, txId, note = "
     txId: tx.id,
     amount: Number(tx.amount),
     note: String(note || "").trim(),
-    status: ["admin", "supervisor"].includes(user.role) ? "approved" : "pending",
+    attachmentName: attachment?.name || "",
+    attachment: attachment || null,
+    status: settlementStatus,
     submittedBy: user.id,
     submittedAt: now,
-    reviewedBy: ["admin", "supervisor"].includes(user.role) ? user.id : null,
-    reviewedAt: ["admin", "supervisor"].includes(user.role) ? now : null,
+    reviewedBy: settlementStatus === "approved" ? user.id : null,
+    reviewedAt: settlementStatus === "approved" ? now : null,
     rejectionReason: "",
     revokedBy: null,
     revokedAt: null,
     revokeReason: "",
   };
+  const annotation = buildSettlementAnnotation(state, { user, tx, item, settlement, now });
+  settlement.annotationId = annotation.id;
   state.receivableSettlements.unshift(settlement);
+  state.annotations.unshift(annotation);
+  tx.currentAnnotationId = annotation.id;
   updateReceivablePayableStatus(state, item);
   appendLog(state, {
     tenantId: item.tenantId,
@@ -508,6 +531,17 @@ export function reviewReceivableSettlement(state, { user, settlementId, action, 
   }
   settlement.reviewedBy = user.id;
   settlement.reviewedAt = now;
+  const annotation = state.annotations.find((entry) => entry.id === settlement.annotationId);
+  if (annotation) {
+    annotation.status = action === "approve" ? "approved" : "rejected";
+    annotation.reviewedBy = user.id;
+    annotation.reviewedAt = now;
+    annotation.rejectionReason = action === "reject" ? settlement.rejectionReason : "";
+    if (action === "reject") {
+      const tx = state.chainTransactions.find((entry) => entry.id === settlement.txId);
+      if (tx?.currentAnnotationId === annotation.id) tx.currentAnnotationId = null;
+    }
+  }
   const item = state.receivablePayables.find((entry) => entry.id === settlement.itemId);
   if (item) updateReceivablePayableStatus(state, item);
   appendLog(state, {
@@ -515,6 +549,40 @@ export function reviewReceivableSettlement(state, { user, settlementId, action, 
     userId: user.id,
     action: action === "approve" ? "审核通过往来款平账" : "驳回往来款平账",
     target: settlement.id,
+    createdAt: now,
+  });
+  return settlement;
+}
+
+export function revokeReceivableSettlement(state, { user, settlementId, reason, now = new Date().toISOString() }) {
+  reconcileState(state);
+  const settlement = state.receivableSettlements.find((entry) => entry.id === settlementId);
+  if (!settlement) throw notFound("平账记录不存在");
+  assertTenantSubscriptionActive(state, settlement.tenantId);
+  assertSupervisorOrAdmin(state, user, settlement.tenantId);
+  if (settlement.status !== "approved") throw badRequest("只有已通过平账可以撤销");
+  const revokeReason = String(reason || "").trim();
+  if (!revokeReason) throw badRequest("请输入撤销原因");
+  settlement.status = "revoked";
+  settlement.revokedBy = user.id;
+  settlement.revokedAt = now;
+  settlement.revokeReason = revokeReason;
+  const annotation = state.annotations.find((entry) => entry.id === settlement.annotationId);
+  if (annotation) {
+    annotation.status = "revoked";
+    annotation.rejectionReason = revokeReason;
+    annotation.reviewedBy = user.id;
+    annotation.reviewedAt = now;
+    const tx = state.chainTransactions.find((entry) => entry.id === settlement.txId);
+    if (tx?.currentAnnotationId === annotation.id) tx.currentAnnotationId = null;
+  }
+  const item = state.receivablePayables.find((entry) => entry.id === settlement.itemId);
+  if (item) updateReceivablePayableStatus(state, item);
+  appendLog(state, {
+    tenantId: settlement.tenantId,
+    userId: user.id,
+    action: "撤销往来款平账",
+    target: `${settlement.id}:${revokeReason}`,
     createdAt: now,
   });
   return settlement;
@@ -1419,6 +1487,72 @@ function buildAnnotation(state, { user, tx, input, now, previous = null, correct
   };
 }
 
+function buildSettlementAnnotation(state, { user, tx, item, settlement, now }) {
+  const type = item.type === "receivable" ? "receivable" : "payable";
+  const category = settlementCategory(type);
+  const baseNote = settlementNote(item, settlement);
+  const status = settlement.status === "approved" ? "approved" : settlement.status === "rejected" ? "rejected" : "pending";
+  return {
+    id: id("annotation"),
+    tenantId: tx.tenantId,
+    chainTxId: tx.id,
+    category,
+    note: baseNote,
+    attachmentName: settlement.attachmentName || "",
+    attachment: settlement.attachment || null,
+    annotatedBy: user.id,
+    annotatedAt: now,
+    status,
+    reviewedBy: settlement.reviewedBy || null,
+    reviewedAt: settlement.reviewedAt || null,
+    rejectionReason: settlement.rejectionReason || "",
+    previousAnnotationId: null,
+    version: nextAnnotationVersion(state, tx.id),
+    correctionType: null,
+    settlementId: settlement.id,
+    settlementType: type,
+    createdAt: now,
+  };
+}
+
+function migrateSettlementAnnotation(state, settlement) {
+  if (!settlement || settlement.annotationId) return;
+  if (!["pending", "approved"].includes(settlement.status)) return;
+  const tx = state.chainTransactions.find((entry) => entry.id === settlement.txId);
+  const item = state.receivablePayables.find((entry) => entry.id === settlement.itemId);
+  const user = state.users.find((entry) => entry.id === settlement.submittedBy) || { id: settlement.submittedBy || "system" };
+  if (!tx || !item) return;
+  const annotation = buildSettlementAnnotation(state, {
+    user,
+    tx,
+    item,
+    settlement,
+    now: settlement.submittedAt || tx.chainTime || new Date().toISOString(),
+  });
+  settlement.annotationId = annotation.id;
+  state.annotations.push(annotation);
+  if (!tx.currentAnnotationId) tx.currentAnnotationId = annotation.id;
+}
+
+function settlementCategory(type) {
+  return type === "receivable" ? "平应收款" : "平应付款";
+}
+
+function settlementNote(item, settlement) {
+  const target = item.type === "receivable" ? "应收款" : "应付款";
+  const note = String(settlement.note || "").trim();
+  return [
+    `已平账：${item.counterparty} · ${item.category} · ${target} ${moneyValue(item.amount)} USDT`,
+    `本次链上流水平账 ${moneyValue(settlement.amount)} USDT`,
+    note ? `说明：${note}` : "",
+  ].filter(Boolean).join("；");
+}
+
+function moneyValue(value) {
+  const numeric = Number(value || 0);
+  return Number.isFinite(numeric) ? numeric.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00";
+}
+
 function getVisibleTransaction(state, user, txId) {
   const tx = state.chainTransactions.find((item) => item.id === txId);
   if (!tx) throw notFound("链上流水不存在");
@@ -1480,6 +1614,7 @@ function visibleReceivablePayables(state, user, filters = {}) {
 
 function transactionStatus(state, tx, annotation) {
   if (tx.internalTransferStatus === "pending") return "transfer_pending";
+  if (annotation?.settlementId) return `settlement_${annotation.status}`;
   if (annotation?.status === "approved" && annotation.correctionType === "reversal") return "reversal";
   if (annotation) return annotationStatus(annotation);
   return isManagedTransactionGroup(state, tx) ? "unannotated" : "historical";
@@ -1488,13 +1623,17 @@ function transactionStatus(state, tx, annotation) {
 function compareTransactionRows(state, left, right) {
   const priority = {
     rejected: 0,
+    settlement_rejected: 0,
     unannotated: 1,
     pending: 2,
+    settlement_pending: 2,
     transfer_pending: 3,
     approved: 4,
+    settlement_approved: 4,
     reversal: 5,
     corrected: 6,
     reversed: 6,
+    settlement_revoked: 6,
     historical: 7,
   };
   const statusDifference = (priority[transactionStatus(state, left.tx, left.annotation)] ?? 6)
@@ -1533,7 +1672,7 @@ function nextAnnotationVersion(state, txId) {
 }
 
 function normalizeLegacyStatus(status) {
-  return ["pending", "approved", "rejected", "corrected", "reversed", "non_business", "restored"].includes(status) ? status : "approved";
+  return ["pending", "approved", "rejected", "corrected", "reversed", "non_business", "restored", "revoked"].includes(status) ? status : "approved";
 }
 
 function positiveNumberOrDefault(value, fallback) {
@@ -1646,6 +1785,14 @@ function annotationStatus(annotation) {
 
 function annotationStatusLabel(annotation) {
   if (!annotation) return "待批注";
+  if (annotation.settlementId) {
+    return {
+      pending: "平账待审核",
+      approved: "平账已通过",
+      rejected: "平账已驳回",
+      revoked: "平账已撤销",
+    }[annotation.status] || annotation.status;
+  }
   if (annotation.correctionType === "reversal" && annotation.status === "approved") return "已冲正";
   return {
     pending: "待审核",
@@ -1655,6 +1802,7 @@ function annotationStatusLabel(annotation) {
     reversed: "已被冲正",
     non_business: "非业务流水",
     restored: "已恢复待批注",
+    revoked: "已撤销",
   }[annotation.status] || annotation.status;
 }
 

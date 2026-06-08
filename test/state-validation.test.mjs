@@ -26,6 +26,7 @@ import {
   migrateAnnotationState,
   requestAnnotationCorrection,
   requestAnnotationReversal,
+  revokeReceivableSettlement,
   restoreNonBusinessTransaction,
   resubmitAnnotation,
   resetUserPassword,
@@ -355,6 +356,7 @@ test("approved reversal preserves the chain transaction but removes business rec
   assert.equal(first.status, "reversed");
   assert.equal(reversal.correctionType, "reversal");
   assert.equal(reversal.status, "approved");
+  assert.equal(state.chainTransactions[0].currentAnnotationId, null);
 });
 
 test("exports chain amount with annotation and employee visibility restrictions", () => {
@@ -658,7 +660,12 @@ test("receivable and payable settlement uses full managed chain transaction", ()
   const pendingSettlement = createReceivableSettlement(state, { user: user(state, "emp"), itemId: receivable.id, txId: "income_tx" });
   assert.equal(pendingSettlement.amount, 1005);
   assert.equal(pendingSettlement.status, "pending");
+  assert.ok(pendingSettlement.annotationId);
+  assert.equal(state.chainTransactions.find((item) => item.id === "income_tx").currentAnnotationId, pendingSettlement.annotationId);
   reviewReceivableSettlement(state, { user: user(state, "sup"), settlementId: pendingSettlement.id, action: "approve" });
+  const settlementAnnotation = state.annotations.find((item) => item.id === pendingSettlement.annotationId);
+  assert.equal(settlementAnnotation.status, "approved");
+  assert.equal(settlementAnnotation.category, "平应收款");
   assert.equal(receivable.status, "settled");
   assert.equal(receivable.settledAmount, 1005);
   assert.equal(receivable.overAmount, 5);
@@ -680,7 +687,38 @@ test("admin can confirm receivable settlement for a tenant", () => {
   const settlement = createReceivableSettlement(state, { user: user(state, "admin"), itemId: receivable.id, txId: "income_tx" });
   assert.equal(settlement.status, "approved");
   assert.equal(settlement.reviewedBy, "admin");
+  assert.equal(state.annotations.find((item) => item.id === settlement.annotationId).status, "approved");
   assert.equal(receivable.status, "settled");
+});
+
+test("settlement rejection and revocation release the transaction for reprocessing", () => {
+  const state = ledgerState({
+    chainTransactions: [
+      {
+        id: "income_tx", tenantId: "tenant_alpha", walletId: "wallet", hash: "income_hash", direction: "income",
+        amount: 1000, counterparty: "TCustomer", confirmed: true, chainTime: "2026-06-05T12:30:00.000Z", currentAnnotationId: null,
+      },
+      {
+        id: "income_tx_2", tenantId: "tenant_alpha", walletId: "wallet", hash: "income_hash_2", direction: "income",
+        amount: 1000, counterparty: "TCustomer", confirmed: true, chainTime: "2026-06-05T13:30:00.000Z", currentAnnotationId: null,
+      },
+    ],
+  });
+  const receivable = createReceivablePayable(state, {
+    user: user(state, "sup"),
+    input: { type: "receivable", counterparty: "客户 A", amount: 1000, category: "客户货款", note: "订单 A" },
+  });
+  const rejected = createReceivableSettlement(state, { user: user(state, "emp"), itemId: receivable.id, txId: "income_tx" });
+  reviewReceivableSettlement(state, { user: user(state, "sup"), settlementId: rejected.id, action: "reject", rejectionReason: "选错往来款" });
+  assert.equal(state.chainTransactions.find((item) => item.id === "income_tx").currentAnnotationId, null);
+  assert.equal(state.annotations.find((item) => item.id === rejected.annotationId).status, "rejected");
+
+  const approved = createReceivableSettlement(state, { user: user(state, "sup"), itemId: receivable.id, txId: "income_tx_2" });
+  assert.equal(receivable.status, "settled");
+  revokeReceivableSettlement(state, { user: user(state, "sup"), settlementId: approved.id, reason: "实际应普通批注" });
+  assert.equal(state.chainTransactions.find((item) => item.id === "income_tx_2").currentAnnotationId, null);
+  assert.equal(state.annotations.find((item) => item.id === approved.annotationId).status, "revoked");
+  assert.equal(receivable.status, "open");
 });
 
 test("receivable settlement rejects wrong direction and historical transactions", () => {
