@@ -110,8 +110,8 @@
     activeView: "dashboard",
     editingAnnotationId: null,
     categories: {
-      income: ["客户回款", "保证金", "其他进账"],
-      expense: ["供应商付款", "运营支出", "其他出账"],
+      income: ["客户回款", "保证金", "其他进账", "临时进账"],
+      expense: ["供应商付款", "运营支出", "其他出账", "临时出账"],
     },
     tenants: [
       { id: "tenant_alpha", name: "Alpha 团队", enabled: true, subscriptionExpiresAt: "", subscriptionStatus: "unset", createdAt: nowIso() },
