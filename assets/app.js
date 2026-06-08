@@ -68,7 +68,7 @@
     "启用钱包",
     "创建员工账号",
     "创建主管账号",
-    "重置TOTP验证",
+    "重置登录密钥",
     "修改员工查看权限",
     "提交租用续费哈希",
     "提交应收款",
@@ -727,7 +727,7 @@
           <form id="loginForm" class="form-grid one">
             <label>账号<input name="loginName" autocomplete="username" required placeholder="请输入登录账号"></label>
             <label>密码<input name="password" type="password" value="${isProduction ? "" : "123456"}" required></label>
-            <label>动态验证码<input name="totpCode" inputmode="numeric" autocomplete="one-time-code" pattern="\\d{6}" placeholder="已绑定 TOTP 时填写 6 位验证码"></label>
+            <label>动态验证码<input name="totpCode" inputmode="numeric" autocomplete="one-time-code" pattern="\\d{6}" placeholder="已绑定登录密钥时填写 6 位验证码"></label>
             <button class="btn primary" type="submit">登录系统</button>
           </form>
           ${isProduction ? "" : `<p class="login-hint">开发测试阶段统一密码：123456</p>`}
@@ -1496,8 +1496,8 @@
 
   function renderUserTable() {
     return `<div class="panel-title"><h3>账号列表</h3></div><div class="table-wrap user-table-wrap"><table class="user-table">
-      <thead><tr><th>姓名</th><th>登录账号</th><th>角色</th><th>TOTP</th><th>查看全部账目</th>${canReview() ? "<th>操作</th>" : ""}</tr></thead>
-      <tbody>${tenantUsers().map((user) => `<tr><td>${escapeHtml(user.name)}</td><td>${escapeHtml(user.loginName || user.id || "-")}</td><td>${roleLabel(user.role)}</td><td>${user.totpEnabled ? "已绑定" : "未绑定"}</td><td>${user.canViewAll ? "是" : "否"}</td>${canReview() ? `<td><div class="row-actions">${user.role === "employee" ? `<label class="checkline compact"><input type="checkbox" data-user-view-all="${user.id}" ${user.canViewAll ? "checked" : ""}> 允许查看全部</label>` : ""}<button class="btn small" data-reset-totp="${user.id}">重置TOTP</button></div></td>` : ""}</tr>`).join("")}</tbody>
+      <thead><tr><th>姓名</th><th>登录账号</th><th>角色</th><th>登录密钥</th><th>查看全部账目</th>${canReview() ? "<th>操作</th>" : ""}</tr></thead>
+      <tbody>${tenantUsers().map((user) => `<tr><td>${escapeHtml(user.name)}</td><td>${escapeHtml(user.loginName || user.id || "-")}</td><td>${roleLabel(user.role)}</td><td>${user.totpEnabled ? "已绑定" : "未绑定"}</td><td>${user.canViewAll ? "是" : "否"}</td>${canReview() ? `<td><div class="row-actions">${user.role === "employee" ? `<label class="checkline compact"><input type="checkbox" data-user-view-all="${user.id}" ${user.canViewAll ? "checked" : ""}> 允许查看全部</label>` : ""}<button class="btn small" data-reset-totp="${user.id}">重置登录密钥</button></div></td>` : ""}</tr>`).join("")}</tbody>
     </table></div>`;
   }
 
@@ -1870,7 +1870,7 @@
       <section class="panel help-doc">
         ${helpSection("一、登录和基础规则", [
           "登录后，系统会根据账号角色显示可用菜单。",
-          "正式登录使用登录账号和密码；已绑定 TOTP 的账号还需要输入验证器里的 6 位动态验证码。",
+          "正式登录使用登录账号和密码；已绑定登录密钥的账号还需要输入验证器里的 6 位动态验证码。",
           "员工主要处理链上流水批注、往来款提交、平账提交、账目查询和自己的操作日志。",
           "主管除员工功能外，还可以审核批注、审核往来款、审核平账、管理员工账号、维护本系统钱包、处理非业务流水和提交租用续费哈希。",
           "系统里的金额、钱包、方向、链上时间和交易哈希都来自链上流水，不能手工修改。",
@@ -1941,7 +1941,7 @@
         ${helpSection("八、账号管理", [
           "主管可以创建员工或主管账号，并设置员工是否允许查看全部账目。",
           "新增账号时需要填写姓名、登录账号和初始密码；正式登录页使用账号和密码登录，不再选择角色。",
-          "新增账号后系统会显示 TOTP 绑定密钥和扫码链接，请交给对应人员保存到验证器；重置 TOTP 后旧验证码会立即失效。",
+          "新增账号后系统会显示登录密钥和扫码链接，请交给对应人员保存到验证器；重置登录密钥后旧验证码会立即失效。",
           "主管账号默认可以查看和审核本系统数据，不显示员工查看范围开关。",
           "勾选查看全部账目时，员工可以查看本系统全部账目。",
           "取消勾选时，员工只能查看自己提交或需要自己处理的记录。",
@@ -2740,11 +2740,11 @@
   async function resetTotp(userId) {
     const target = state.users.find((item) => item.id === userId);
     if (!target) return;
-    if (!confirm(`确认重置「${target.name}」的 TOTP？旧验证码会立即失效。`)) return;
+    if (!confirm(`确认重置「${target.name}」的登录密钥？旧验证码会立即失效。`)) return;
     try {
       const payload = await apiMutate(`/api/users/${encodeURIComponent(userId)}/totp`, { method: "PATCH" });
       render();
-      toast("TOTP 已重置，请重新绑定");
+      toast("登录密钥已重置，请重新绑定");
       showTotpSetup(payload.totpSetup);
     } catch (error) {
       toast(error.message);
@@ -2754,7 +2754,7 @@
   function showTotpSetup(setup) {
     if (!setup?.secret) return;
     const overlay = createFormModal({
-      title: "TOTP 绑定信息",
+      title: "登录密钥绑定信息",
       desc: "请将以下密钥添加到 Google Authenticator、Microsoft Authenticator 等验证器；关闭后页面不再显示完整密钥。",
       body: `
         <section class="annotation-modal-summary">

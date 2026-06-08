@@ -773,7 +773,7 @@ export function resetUserTotp(state, { user, userId, now = new Date().toISOStrin
   appendLog(state, {
     tenantId: target.tenantId || null,
     userId: user.id,
-    action: "重置TOTP验证",
+    action: "重置登录密钥",
     target: target.name,
     createdAt: now,
   });

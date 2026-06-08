@@ -222,7 +222,7 @@ async function handleApi(req, res, pathname) {
         tenantId: user.tenantId || null,
         userId: user.id,
         action: "登录失败",
-        target: `${user.name}:TOTP`,
+        target: `${user.name}:登录密钥`,
       });
       await storage.writeState?.(state);
       const error = new Error("动态验证码不正确");
