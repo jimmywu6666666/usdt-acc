@@ -739,7 +739,7 @@
             <strong>${pending}</strong>
             <small>主管确认业务原由与凭证</small>
           </div>
-          <div class="pending-business-card annotation" role="button" tabindex="0" data-dashboard-target="new-annotation">
+          <div class="pending-business-card annotation" role="button" tabindex="0" data-dashboard-target="entries-unannotated">
             <span>待批注流水</span>
             <strong>${unannotated}</strong>
             <small>链上已有记录但尚无业务说明</small>
@@ -2084,8 +2084,10 @@
       "review-receivables": "[data-review-section='receivables']",
       "review-settlements": "[data-review-section='settlements']",
     };
-    if (target === "new-annotation") {
-      state.activeView = "new";
+    if (target === "entries-unannotated") {
+      entryFilters = { ...defaultEntryFilters(), from: "", to: "", status: "unannotated" };
+      entriesPage = 1;
+      state.activeView = "entries";
       state.editingAnnotationId = null;
       render();
       return;
