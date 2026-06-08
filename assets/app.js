@@ -729,20 +729,6 @@
           }).join("")}
         </div>
       </section>
-      <div class="section-label"><h3>钱包实际流水</h3><span>按链上流水统计，不区分是否已批注或审核</span></div>
-      <section class="grid stats">
-        ${periods.map((period) => {
-          const summary = summarizeActual(actual, period.start, period.end);
-          return `<div class="card period-card">
-            <div class="card-label">${period.label}</div>
-            <div class="period-values">
-              <div><span>进账</span><strong class="income-value">${money(summary.income)}</strong></div>
-              <div><span>出账</span><strong class="expense-value">${money(summary.expense)}</strong></div>
-            </div>
-            <div class="card-foot">USDT</div>
-          </div>`;
-        }).join("")}
-      </section>
       <div class="section-label"><h3>待处理业务</h3><span>需要补充说明或主管确认的流水</span></div>
       <section class="dashboard-business-block">
         <div class="pending-business-row">
@@ -757,6 +743,20 @@
             <small>链上已有记录但尚无业务说明</small>
           </div>
         </div>
+      </section>
+      <div class="section-label"><h3>钱包实际流水</h3><span>按链上流水统计，不区分是否已批注或审核</span></div>
+      <section class="grid stats">
+        ${periods.map((period) => {
+          const summary = summarizeActual(actual, period.start, period.end);
+          return `<div class="card period-card">
+            <div class="card-label">${period.label}</div>
+            <div class="period-values">
+              <div><span>进账</span><strong class="income-value">${money(summary.income)}</strong></div>
+              <div><span>出账</span><strong class="expense-value">${money(summary.expense)}</strong></div>
+            </div>
+            <div class="card-foot">USDT</div>
+          </div>`;
+        }).join("")}
       </section>
       <div class="section-label"><h3>往来款概况</h3><span>只统计已审核且未作废的往来款</span></div>
       <section class="dashboard-business-block rp-overview">
