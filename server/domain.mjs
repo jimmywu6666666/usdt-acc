@@ -1,4 +1,4 @@
-import { hashPassword } from "./auth.mjs";
+import { generateTotpSecret, hashPassword } from "./auth.mjs";
 import { isValidTronAddress } from "./tron-provider.mjs";
 
 const requiredArrays = ["tenants", "users", "wallets", "annotations", "chainTransactions", "auditLogs"];
@@ -695,6 +695,7 @@ export function createEmployee(state, { user, input, now = new Date().toISOStrin
     role,
     canViewAll: role === "supervisor" ? true : input.canViewAll === true,
     passwordHash: hashPassword(password),
+    totpSecret: generateTotpSecret(),
   };
   state.users.push(teamUser);
   appendLog(state, {
@@ -734,6 +735,7 @@ export function createTenant(state, { user, input, now = new Date().toISOString(
     role: "supervisor",
     canViewAll: true,
     passwordHash: hashPassword(supervisorPassword),
+    totpSecret: generateTotpSecret(),
   };
   state.tenants.push(tenant);
   state.users.push(supervisor);
@@ -756,6 +758,26 @@ export function updateTenantStatus(state, { user, tenantId, enabled, now = new D
     createdAt: now,
   });
   return tenant;
+}
+
+export function resetUserTotp(state, { user, userId, now = new Date().toISOString() }) {
+  const target = state.users.find((item) => item.id === userId);
+  if (!target) throw notFound("账号不存在");
+  if (user.role === "admin") {
+    // Admin can reset any account.
+  } else {
+    assertSupervisor(state, user.id, target.tenantId);
+    if (target.tenantId !== user.tenantId) throw forbidden("没有操作该账号的权限");
+  }
+  target.totpSecret = generateTotpSecret();
+  appendLog(state, {
+    tenantId: target.tenantId || null,
+    userId: user.id,
+    action: "重置TOTP验证",
+    target: target.name,
+    createdAt: now,
+  });
+  return target;
 }
 
 function validateNewLogin(state, loginName, password) {

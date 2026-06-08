@@ -33,6 +33,7 @@ import {
   requestAnnotationReversal,
   restoreNonBusinessTransaction,
   resubmitAnnotation,
+  resetUserTotp,
   reviewAnnotation,
   reviewReceivablePayable,
   reviewReceivableSettlement,
@@ -46,7 +47,7 @@ import {
   updateWalletManagedFrom,
   voidReceivablePayable,
 } from "./domain.mjs";
-import { createSession, destroySession, getToken, publicUser, requireSession, verifyPassword } from "./auth.mjs";
+import { createSession, destroySession, getToken, publicUser, requireSession, totpSetupForUser, verifyPassword, verifyTotp } from "./auth.mjs";
 import { createStorage } from "./storage.mjs";
 import { createTronProvider } from "./tron-provider.mjs";
 import { startChainSyncScheduler, syncTenantWallets } from "./chain-sync.mjs";
@@ -213,6 +214,18 @@ async function handleApi(req, res, pathname) {
       });
       await storage.writeState?.(state);
       const error = new Error("账号或密码不正确");
+      error.statusCode = 401;
+      throw error;
+    }
+    if (user.totpSecret && !verifyTotp(user, body.totpCode || body.totp || "")) {
+      appendLog(state, {
+        tenantId: user.tenantId || null,
+        userId: user.id,
+        action: "登录失败",
+        target: `${user.name}:TOTP`,
+      });
+      await storage.writeState?.(state);
+      const error = new Error("动态验证码不正确");
       error.statusCode = 401;
       throw error;
     }
@@ -533,12 +546,25 @@ async function handleApi(req, res, pathname) {
 
   if (pathname === "/api/users" && req.method === "POST") {
     const body = await readJsonBody(req);
+    let createdUser = null;
     const state = await storage.mutateState(async (current) => {
       const { user } = await authenticate(current);
-      createEmployee(current, { user, input: body });
+      createdUser = createEmployee(current, { user, input: body });
       return current;
     });
-    respond(200, { ok: true, state });
+    respond(200, { ok: true, state, totpSetup: totpSetupForUser(createdUser) });
+    return;
+  }
+
+  const resetTotp = pathname.match(/^\/api\/users\/([^/]+)\/totp$/);
+  if (resetTotp && req.method === "PATCH") {
+    let targetUser = null;
+    const state = await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      targetUser = resetUserTotp(current, { user, userId: resetTotp[1] });
+      return current;
+    });
+    respond(200, { ok: true, state, totpSetup: totpSetupForUser(targetUser) });
     return;
   }
 
@@ -556,12 +582,13 @@ async function handleApi(req, res, pathname) {
 
   if (pathname === "/api/tenants" && req.method === "POST") {
     const body = await readJsonBody(req);
+    let created = null;
     const state = await storage.mutateState(async (current) => {
       const { user } = await authenticate(current);
-      createTenant(current, { user, input: body });
+      created = createTenant(current, { user, input: body });
       return current;
     });
-    respond(200, { ok: true, state });
+    respond(200, { ok: true, state, totpSetup: totpSetupForUser(created?.supervisor) });
     return;
   }
 

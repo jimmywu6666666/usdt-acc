@@ -40,7 +40,7 @@ import {
   validateState,
   walletBalance,
 } from "../server/domain.mjs";
-import { hashPassword, verifyPassword } from "../server/auth.mjs";
+import { hashPassword, verifyPassword, verifyTotp } from "../server/auth.mjs";
 
 function ledgerState(overrides = {}) {
   return {
@@ -120,6 +120,14 @@ test("verifies default and hashed passwords", () => {
   assert.equal(verifyPassword({ id: "demo" }, "123456", { allowDemoPassword: false }), false);
   const hashed = { passwordHash: hashPassword("secret") };
   assert.equal(verifyPassword(hashed, "secret"), true);
+});
+
+test("verifies TOTP codes for bound accounts", () => {
+  const user = { totpSecret: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" };
+  const now = new Date("1970-01-01T00:00:59.000Z");
+  assert.equal(verifyTotp({}, "", { now }), true);
+  assert.equal(verifyTotp(user, "000000", { now, window: 0 }), false);
+  assert.equal(verifyTotp(user, "287082", { now, window: 0 }), true);
 });
 
 test("creates a pending annotation without accepting amount or wallet overrides", () => {
