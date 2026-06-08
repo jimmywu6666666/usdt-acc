@@ -55,7 +55,7 @@ function ledgerState(overrides = {}) {
     activeTenantId: "tenant_alpha",
     activeUserId: "admin",
     activeView: "dashboard",
-    categories: { income: ["客户回款", "其他进账"], expense: ["供应商付款", "其他出账"] },
+    categories: { income: ["客户回款", "其他入账"], expense: ["供应商付款", "其他出账"] },
     tenants: [{ id: "tenant_alpha", name: "Alpha", enabled: true, subscriptionExpiresAt: "2026-12-31T00:00:00.000Z", subscriptionStatus: "active" }],
     users: [
       { id: "admin", tenantId: null, name: "管理员", role: "admin", canViewAll: true },
@@ -740,7 +740,7 @@ test("receivable settlement rejects wrong direction and historical transactions"
     input: { type: "receivable", counterparty: "客户 A", amount: 1000, category: "客户货款", note: "订单 A" },
   });
   assert.throws(() => createReceivableSettlement(state, { user: user(state, "emp"), itemId: receivable.id, txId: "old_income" }), /历史无需批注/);
-  assert.throws(() => createReceivableSettlement(state, { user: user(state, "emp"), itemId: receivable.id, txId: "expense_tx" }), /应收款只能使用进账/);
+  assert.throws(() => createReceivableSettlement(state, { user: user(state, "emp"), itemId: receivable.id, txId: "expense_tx" }), /应收款只能使用入账/);
 });
 
 test("receivable export follows filters and includes settlement details", () => {
@@ -791,12 +791,12 @@ test("admin creates tenants and global categories", () => {
     user: user(state, "admin"),
     input: { name: "Beta", supervisorName: "Beta 主管", supervisorLoginName: "beta_sup", supervisorPassword: "secret123" },
   });
-  createCategory(state, { user: user(state, "admin"), input: { type: "income", name: "新进账分类" } });
+  createCategory(state, { user: user(state, "admin"), input: { type: "income", name: "新入账分类" } });
   const supervisor = state.users.find((item) => item.name === "Beta 主管");
   assert.equal(state.tenants.at(-1).name, "Beta");
   assert.equal(supervisor.loginName, "beta_sup");
   assert.equal(verifyPassword(supervisor, "secret123", { allowDemoPassword: false }), true);
-  assert.equal(state.categories.income.includes("新进账分类"), true);
+  assert.equal(state.categories.income.includes("新入账分类"), true);
 });
 
 test("admin manages tenant enabled status", () => {

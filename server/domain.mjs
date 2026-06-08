@@ -466,7 +466,7 @@ export function createReceivableSettlement(state, { user, itemId, txId, note = "
   if (!tx.confirmed) throw badRequest("链上交易尚未确认，暂时不能平账");
   const expectedDirection = item.type === "receivable" ? "income" : "expense";
   if (tx.direction !== expectedDirection || tx.transactionType === "transfer") {
-    throw badRequest(item.type === "receivable" ? "应收款只能使用进账流水平账" : "应付款只能使用出账流水平账");
+    throw badRequest(item.type === "receivable" ? "应收款只能使用入账流水平账" : "应付款只能使用出账流水平账");
   }
   const current = currentAnnotation(state, tx);
   if (current) {
@@ -1776,7 +1776,7 @@ function addDays(date, days) {
 }
 
 function categoryFallback(direction) {
-  return direction === "income" ? "其他进账" : "其他出账";
+  return direction === "income" ? "其他入账" : "其他出账";
 }
 
 function annotationStatus(annotation) {
@@ -1852,7 +1852,7 @@ function startOfLocalDay(value = new Date()) {
 }
 
 function directionLabel(direction) {
-  return direction === "income" ? "进账" : "出账";
+  return direction === "income" ? "入账" : "出账";
 }
 
 export function reconcileInternalTransfers(state) {

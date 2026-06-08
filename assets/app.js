@@ -76,7 +76,7 @@
     normal: ["一般", "blue"],
     urgent: ["紧急", "red"],
   };
-  const typeMap = { income: "进账", expense: "出账", transfer: "内部划转" };
+  const typeMap = { income: "入账", expense: "出账", transfer: "内部划转" };
   const supervisorLogActions = [
     "提交链上流水批注",
     "修改并重新提交批注",
@@ -145,7 +145,7 @@
     activeView: "dashboard",
     editingAnnotationId: null,
     categories: {
-      income: ["客户回款", "保证金", "其他进账", "临时进账"],
+      income: ["客户回款", "保证金", "其他入账", "临时入账"],
       expense: ["供应商付款", "运营支出", "其他出账", "临时出账"],
     },
     tenants: [
@@ -906,7 +906,7 @@
             return `<div class="period-card">
               <div class="card-label">${period.label}</div>
               <div class="period-values">
-                <div><span>进账</span><strong class="income-value">${money(summary.income)}</strong></div>
+                <div><span>入账</span><strong class="income-value">${money(summary.income)}</strong></div>
                 <div><span>出账</span><strong class="expense-value">${money(summary.expense)}</strong></div>
               </div>
               <div class="card-foot">USDT</div>
@@ -937,7 +937,7 @@
             return `<div class="period-card">
               <div class="card-label">${period.label}</div>
               <div class="period-values">
-                <div><span>进账</span><strong class="income-value">${money(summary.income)}</strong></div>
+                <div><span>入账</span><strong class="income-value">${money(summary.income)}</strong></div>
                 <div><span>出账</span><strong class="expense-value">${money(summary.expense)}</strong></div>
               </div>
               <div class="card-foot">USDT</div>
@@ -1103,7 +1103,7 @@
       <form id="filters" class="filters">
         <label>开始日期<input type="date" name="from" value="${escapeHtml(entryFilters.from)}"></label>
         <label>结束日期<input type="date" name="to" value="${escapeHtml(entryFilters.to)}"></label>
-        <label>方向<select name="direction"><option value="">全部</option><option value="income" ${selectedFilter("direction", "income")}>进账</option><option value="expense" ${selectedFilter("direction", "expense")}>出账</option><option value="transfer" ${selectedFilter("direction", "transfer")}>内部划转</option></select></label>
+        <label>方向<select name="direction"><option value="">全部</option><option value="income" ${selectedFilter("direction", "income")}>入账</option><option value="expense" ${selectedFilter("direction", "expense")}>出账</option><option value="transfer" ${selectedFilter("direction", "transfer")}>内部划转</option></select></label>
         <label>批注状态<select name="status"><option value="">全部</option><option value="unannotated" ${selectedFilter("status", "unannotated")}>待批注</option><option value="non_business" ${selectedFilter("status", "non_business")}>非业务流水</option><option value="transfer_pending" ${selectedFilter("status", "transfer_pending")}>内部划转待确认</option><option value="historical" ${selectedFilter("status", "historical")}>历史无需批注</option><option value="pending" ${selectedFilter("status", "pending")}>待审核</option><option value="settlement_pending" ${selectedFilter("status", "settlement_pending")}>平账待审核</option><option value="approved" ${selectedFilter("status", "approved")}>已审核</option><option value="settlement_approved" ${selectedFilter("status", "settlement_approved")}>平账已审核</option><option value="rejected" ${selectedFilter("status", "rejected")}>已驳回</option><option value="settlement_rejected" ${selectedFilter("status", "settlement_rejected")}>平账已驳回</option><option value="reversal" ${selectedFilter("status", "reversal")}>已取消入账</option><option value="settlement_revoked" ${selectedFilter("status", "settlement_revoked")}>平账已撤销</option></select></label>
         <label>钱包<select name="walletId"><option value="">全部</option>${tenantWallets().map((wallet) => `<option value="${wallet.id}" ${selectedFilter("walletId", wallet.id)}>${wallet.alias}</option>`).join("")}</select></label>
         <label>最小金额<input type="number" name="minAmount" step="0.01" value="${escapeHtml(entryFilters.minAmount)}"></label>
@@ -1247,7 +1247,7 @@
     const selectedTx = editingTx || available[0] || null;
     const categories = selectedTx ? selectedTx.transactionType === "transfer" ? ["内部划转"] : state.categories[selectedTx.direction] : [];
     return `
-      ${pageHead(editing ? "修改并重新提交" : "批注链上流水", "先选择真实链上进出账，再补充业务分类、用途和凭证；金额及钱包不可修改")}
+      ${pageHead(editing ? "修改并重新提交" : "批注链上流水", "先选择真实链上入账或出账流水，再补充业务分类、用途和凭证；金额及钱包不可修改")}
       ${renderTenantBusinessLockNotice()}
       <section class="panel">
         ${tenantBusinessActive() && selectedTx ? `<form id="annotationForm" class="form-grid">
@@ -2157,7 +2157,7 @@
       <section class="panel">
         <div class="panel-title"><h3>新增统一分类</h3></div>
         <form id="categoryForm" class="form-grid">
-          <label>收支类型<select name="type"><option value="income">进账</option><option value="expense">出账</option></select></label>
+          <label>收支类型<select name="type"><option value="income">入账</option><option value="expense">出账</option></select></label>
           <label>分类名称<input name="name" required></label>
           <div class="actions"><button class="btn primary" type="submit">新增分类</button></div>
         </form>
@@ -2165,7 +2165,7 @@
       <section class="panel">
         <div class="panel-title"><h3>统一分类列表</h3><span>修改只影响后续批注可选项，历史已审核记录保持原分类</span></div>
         <div class="grid two-col">
-          ${renderCategoryList("income", "进账分类")}
+          ${renderCategoryList("income", "入账分类")}
           ${renderCategoryList("expense", "出账分类")}
         </div>
       </section>
@@ -2394,7 +2394,7 @@
           "备注用途建议填写客户信息、业务说明、资金用途等。",
           "提交后状态变为待审核，由主管审核。",
           "金额和钱包不需要填写，系统以链上数据为准。",
-          "内部划转不计入进账、出账统计，但需要补充用途说明并审核。",
+          "内部划转不计入入账、出账统计，但需要补充用途说明并审核。",
           "被驳回后，员工可以按驳回原因修改并重新提交。",
         ])}
         ${helpSection("五、主管审核批注", [
@@ -2408,11 +2408,11 @@
         ])}
         ${helpSection("六、往来款管理", [
           "往来款管理用于记录和查看应收款、应付款。",
-          "应收款表示别人欠本系统的钱，后续用进账流水平账；应付款表示本系统欠别人的钱，后续用出账流水平账。",
+          "应收款表示别人欠本系统的钱，后续用入账流水平账；应付款表示本系统欠别人的钱，后续用出账流水平账。",
           "员工可以提交应收款或应付款，主管审核通过后才能平账；主管创建的往来款直接生效。",
           "提交往来款时可上传或粘贴凭证图片，方便主管审核业务来源和金额依据。",
           "平账从流水账目发起：先找到实际收款或付款的链上流水，再选择对应的应收款或应付款。",
-          "进账流水只能平应收款，出账流水只能平应付款。",
+          "入账流水只能平应收款，出账流水只能平应付款。",
           "链上流水用于平账前必须没有当前有效批注；已经普通批注的流水需要先取消入账恢复待处理后，才能重新平账。",
           "纳入管理时间之前的历史无需批注流水不能用于平账。",
           "一笔链上流水只能绑定一笔往来款，且必须整笔用于平账，不能拆分或部分平账。",
@@ -3768,7 +3768,7 @@
   async function submitCategory(event) {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.target).entries());
-    if (!confirm(`确认新增${data.type === "expense" ? "出账" : "进账"}分类「${data.name || ""}」？`)) return;
+    if (!confirm(`确认新增${data.type === "expense" ? "出账" : "入账"}分类「${data.name || ""}」？`)) return;
     try {
       await apiMutate("/api/categories", { body: data });
       render();
@@ -4222,7 +4222,7 @@
       if (state.annotations.some((item) => item.legacyEntryId === entry.id)) continue;
       const annotation = {
         id: `annotation_${entry.id}`, tenantId: entry.tenantId, chainTxId: tx.id,
-        category: entry.category || (tx.direction === "income" ? "其他进账" : "其他出账"),
+        category: entry.category || (tx.direction === "income" ? "其他入账" : "其他出账"),
         note: entry.note || "", attachmentName: entry.attachmentName || "", attachment: entry.attachment || null,
         annotatedBy: entry.submittedBy, annotatedAt: entry.createdAt || entry.occurredAt || tx.chainTime,
         status: entry.status || "approved", reviewedBy: entry.reviewedBy || null, reviewedAt: entry.reviewedAt || null,
