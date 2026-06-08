@@ -2003,9 +2003,9 @@
     const actor = state.users.find((item) => item.id === message.userId);
     const side = actor?.role === "admin" ? "admin" : "tenant";
     return `<article class="ticket-message ${side}">
-      <div><strong>${escapeHtml(userName(message.userId))}</strong><span>${formatDate(message.createdAt)}</span></div>
-      <p>${escapeHtml(message.content)}</p>
-      ${message.attachmentName ? `<button class="attachment-link" type="button" data-ticket-attachment data-ticket-id="${escapeHtml(ticket.id)}" data-message-id="${escapeHtml(message.id)}">${escapeHtml(message.attachmentName)}</button>` : ""}
+      <div class="ticket-message-head"><strong>${escapeHtml(userName(message.userId))}</strong><span>${formatDate(message.createdAt)}</span></div>
+      <p class="ticket-message-content">${escapeHtml(message.content)}</p>
+      ${message.attachmentName ? `<div class="ticket-attachment-row"><button class="ticket-attachment-button" type="button" data-ticket-attachment data-ticket-id="${escapeHtml(ticket.id)}" data-message-id="${escapeHtml(message.id)}">${escapeHtml(message.attachmentName)}</button></div>` : ""}
     </article>`;
   }
 

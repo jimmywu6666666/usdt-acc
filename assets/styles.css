@@ -848,18 +848,58 @@ button {
   background: #f0fdfa;
 }
 
-.ticket-message div {
+.ticket-message-head {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 10px;
   color: var(--muted);
   font-size: 12px;
 }
 
-.ticket-message p {
+.ticket-message-head strong,
+.ticket-message-head span {
+  min-width: 0;
+}
+
+.ticket-message-head span {
+  flex: 0 0 auto;
+}
+
+.ticket-message-content {
   margin: 0;
+  color: var(--text);
+  line-height: 1.5;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.ticket-attachment-row {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: 6px;
+  border-top: 1px solid rgba(101, 117, 139, 0.18);
+}
+
+.ticket-attachment-button {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 7px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.ticket-attachment-button:hover {
+  border-color: #93c5fd;
+  background: #dbeafe;
 }
 
 .panel-title {
@@ -2072,6 +2112,14 @@ tr:last-child td {
 
   .ticket-message {
     width: 100%;
+  }
+
+  .ticket-message-head {
+    display: grid;
+  }
+
+  .ticket-message-head span {
+    flex: initial;
   }
 
   .pagination {
