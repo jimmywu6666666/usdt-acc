@@ -4,6 +4,7 @@ import {
   createAnnotation,
   createReceivablePayable,
   createReceivableSettlement,
+  createSupportTicket,
   createCategory,
   createEmployee,
   createTenant,
@@ -30,6 +31,7 @@ import {
   reviewAnnotation,
   reviewReceivablePayable,
   reviewReceivableSettlement,
+  replySupportTicket,
   searchChainTransactions,
   submitSubscriptionHash,
   syncChainTransactions,
@@ -37,6 +39,7 @@ import {
   updateEmployeePermission,
   updateSubscriptionSettings,
   updateSystemSettings,
+  updateSupportTicketStatus,
   updateTenantStatus,
   updateWalletManagedFrom,
   validateState,
@@ -67,6 +70,7 @@ function ledgerState(overrides = {}) {
       currentAnnotationId: null,
     }],
     platformPayments: [],
+    supportTickets: [],
     subscriptionSettings: { monthlyFee: 100, platformWalletAddress: "TUfGNh99WN3GH5WjnqFKottWuYKpjomNbd", enabled: true, autoDisable: true },
     auditLogs: [],
     ...overrides,
@@ -101,6 +105,70 @@ test("unopened tenant cannot perform billable business operations", () => {
     input: { type: "receivable", counterparty: "客户A", amount: 100, category: "客户回款", note: "测试应收" },
   }), /租用未开通/);
   assert.throws(() => syncChainTransactions(state, { user: user(state, "sup"), tenantId: "tenant_alpha" }), /租用未开通/);
+});
+
+test("supervisor creates support ticket and admin reply moves it to tenant side", () => {
+  const state = ledgerState();
+  const ticket = createSupportTicket(state, {
+    user: user(state, "sup"),
+    input: { title: "续费未生效", category: "subscription", priority: "urgent", content: "交易哈希已提交但租用状态没有变化" },
+    now: "2026-06-05T13:00:00.000Z",
+  });
+  assert.equal(ticket.status, "waiting_admin");
+  assert.equal(ticket.messages.length, 1);
+  assert.equal(state.auditLogs[0].action, "提交工单");
+
+  replySupportTicket(state, {
+    user: user(state, "admin"),
+    ticketId: ticket.id,
+    content: "已收到，正在核对平台收款钱包流水",
+    now: "2026-06-05T13:05:00.000Z",
+  });
+  assert.equal(ticket.status, "waiting_tenant");
+  assert.equal(ticket.messages.length, 2);
+
+  updateSupportTicketStatus(state, {
+    user: user(state, "sup"),
+    ticketId: ticket.id,
+    status: "closed",
+    now: "2026-06-05T13:10:00.000Z",
+  });
+  assert.equal(ticket.status, "closed");
+  assert.equal(ticket.closedBy, "sup");
+});
+
+test("support tickets are restricted to supervisors, admins and own tenant", () => {
+  const state = ledgerState({
+    tenants: [
+      { id: "tenant_alpha", name: "Alpha", enabled: true, subscriptionExpiresAt: "2026-12-31T00:00:00.000Z", subscriptionStatus: "active" },
+      { id: "tenant_beta", name: "Beta", enabled: true, subscriptionExpiresAt: "2026-12-31T00:00:00.000Z", subscriptionStatus: "active" },
+    ],
+    users: [
+      { id: "admin", tenantId: null, name: "管理员", role: "admin", canViewAll: true },
+      { id: "sup", tenantId: "tenant_alpha", name: "主管", role: "supervisor", canViewAll: true },
+      { id: "emp", tenantId: "tenant_alpha", name: "员工", role: "employee", canViewAll: true },
+      { id: "beta_sup", tenantId: "tenant_beta", name: "Beta 主管", role: "supervisor", canViewAll: true },
+    ],
+  });
+  assert.throws(() => createSupportTicket(state, {
+    user: user(state, "emp"),
+    input: { title: "员工提交", content: "尝试提交" },
+  }), /只有主管/);
+
+  const ticket = createSupportTicket(state, {
+    user: user(state, "sup"),
+    input: { title: "Alpha 问题", content: "需要平台处理" },
+  });
+  assert.throws(() => replySupportTicket(state, {
+    user: user(state, "beta_sup"),
+    ticketId: ticket.id,
+    content: "跨租户回复",
+  }), /没有操作该工单/);
+  assert.doesNotThrow(() => replySupportTicket(state, {
+    user: user(state, "admin"),
+    ticketId: ticket.id,
+    content: "平台可回复",
+  }));
 });
 
 test("migrates a legacy matched ledger entry into an annotation", () => {

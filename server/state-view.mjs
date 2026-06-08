@@ -9,6 +9,7 @@ export function stateForUser(state, user) {
   safeState.annotations = safeState.annotations.map(annotationForClient);
   safeState.receivablePayables ||= [];
   safeState.receivableSettlements ||= [];
+  safeState.supportTickets ||= [];
   safeState.receivablePayables = safeState.receivablePayables.map(receivableForClient);
 
   if (user.role === "admin") {
@@ -43,6 +44,9 @@ export function stateForUser(state, user) {
   safeState.walletBalanceSnapshots = (safeState.walletBalanceSnapshots || []).filter((item) => item.tenantId === tenantId);
   safeState.receivablePayables = (safeState.receivablePayables || []).filter((item) => item.tenantId === tenantId);
   safeState.receivableSettlements = (safeState.receivableSettlements || []).filter((item) => item.tenantId === tenantId);
+  safeState.supportTickets = user.role === "supervisor"
+    ? (safeState.supportTickets || []).filter((item) => item.tenantId === tenantId)
+    : [];
   safeState.entries = (safeState.entries || []).filter((item) => item.tenantId === tenantId);
   safeState.legacyEntries = (safeState.legacyEntries || []).filter((item) => item.tenantId === tenantId);
 

@@ -15,6 +15,7 @@ import {
   createAnnotation,
   createReceivablePayable,
   createReceivableSettlement,
+  createSupportTicket,
   createTenant,
   createWallet,
   disableWallet,
@@ -38,10 +39,12 @@ import {
   reviewAnnotation,
   reviewReceivablePayable,
   reviewReceivableSettlement,
+  replySupportTicket,
   searchChainTransactions,
   submitSubscriptionHash,
   updateSubscriptionSettings,
   updateSystemSettings,
+  updateSupportTicketStatus,
   updateCategory,
   updateEmployeePermission,
   updateTenantStatus,
@@ -439,6 +442,41 @@ async function handleApi(req, res, pathname) {
       const { user } = await authenticate(current);
       const item = createReceivablePayable(current, { user, input: { ...body, attachment: null } });
       await storeReceivableUpload(item, body.attachment);
+      return current;
+    });
+    respond(200, { ok: true, state });
+    return;
+  }
+
+  if (pathname === "/api/support-tickets" && req.method === "POST") {
+    const body = await readJsonBody(req);
+    const state = await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      createSupportTicket(current, { user, input: body });
+      return current;
+    });
+    respond(200, { ok: true, state });
+    return;
+  }
+
+  const supportTicketReply = pathname.match(/^\/api\/support-tickets\/([^/]+)\/replies$/);
+  if (supportTicketReply && req.method === "POST") {
+    const body = await readJsonBody(req);
+    const state = await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      replySupportTicket(current, { user, ticketId: supportTicketReply[1], content: body.content });
+      return current;
+    });
+    respond(200, { ok: true, state });
+    return;
+  }
+
+  const supportTicketStatus = pathname.match(/^\/api\/support-tickets\/([^/]+)\/status$/);
+  if (supportTicketStatus && req.method === "PATCH") {
+    const body = await readJsonBody(req);
+    const state = await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      updateSupportTicketStatus(current, { user, ticketId: supportTicketStatus[1], status: body.status });
       return current;
     });
     respond(200, { ok: true, state });

@@ -1,7 +1,7 @@
 import { generateTotpSecret, hashPassword } from "./auth.mjs";
 import { isValidTronAddress } from "./tron-provider.mjs";
 
-const requiredArrays = ["tenants", "users", "wallets", "annotations", "chainTransactions", "auditLogs"];
+const requiredArrays = ["tenants", "users", "wallets", "annotations", "chainTransactions", "auditLogs", "supportTickets"];
 
 export function validateState(state) {
   if (!state || typeof state !== "object") return "state 必须是对象";
@@ -14,6 +14,7 @@ export function validateState(state) {
   if (state.platformPayments && !Array.isArray(state.platformPayments)) return "platformPayments 必须是数组";
   if (state.receivablePayables && !Array.isArray(state.receivablePayables)) return "receivablePayables 必须是数组";
   if (state.receivableSettlements && !Array.isArray(state.receivableSettlements)) return "receivableSettlements 必须是数组";
+  if (state.supportTickets && !Array.isArray(state.supportTickets)) return "supportTickets 必须是数组";
   return null;
 }
 
@@ -34,6 +35,7 @@ export function migrateAnnotationState(state) {
   state.platformPayments ||= [];
   state.receivablePayables ||= [];
   state.receivableSettlements ||= [];
+  state.supportTickets ||= [];
   state.entries ||= [];
   state.legacyEntries ||= [];
   state.subscriptionSettings ||= {};
@@ -1152,6 +1154,119 @@ export function getAuditLogsForUser(state, { user, tenantId }) {
     if (isRoutineAuditLog(log)) return false;
     return user.role !== "employee" || log.userId === user.id;
   });
+}
+
+export function createSupportTicket(state, { user, input, now = new Date().toISOString() }) {
+  reconcileState(state);
+  if (user.role !== "supervisor") throw forbidden("只有主管可以提交工单");
+  const tenant = state.tenants.find((item) => item.id === user.tenantId);
+  if (!tenant) throw forbidden("所属系统不存在");
+  const title = String(input.title || "").trim();
+  const category = normalizeTicketCategory(input.category);
+  const priority = normalizeTicketPriority(input.priority);
+  const content = String(input.content || "").trim();
+  if (!title) throw badRequest("工单标题不能为空");
+  if (title.length > 80) throw badRequest("工单标题不能超过 80 个字");
+  if (!content) throw badRequest("请填写工单内容");
+  if (content.length > 2000) throw badRequest("工单内容不能超过 2000 个字");
+  const ticket = {
+    id: id("ticket"),
+    tenantId: tenant.id,
+    title,
+    category,
+    priority,
+    status: "waiting_admin",
+    createdBy: user.id,
+    createdAt: now,
+    updatedAt: now,
+    closedAt: null,
+    closedBy: null,
+    messages: [{
+      id: id("msg"),
+      userId: user.id,
+      content,
+      createdAt: now,
+    }],
+  };
+  state.supportTickets.unshift(ticket);
+  appendLog(state, {
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "提交工单",
+    target: `${ticket.id}:${title}`,
+    createdAt: now,
+  });
+  return ticket;
+}
+
+export function replySupportTicket(state, { user, ticketId, content, now = new Date().toISOString() }) {
+  reconcileState(state);
+  const ticket = findSupportTicketForUser(state, user, ticketId);
+  if (ticket.status === "closed") throw badRequest("已关闭工单不能继续回复");
+  const text = String(content || "").trim();
+  if (!text) throw badRequest("回复内容不能为空");
+  if (text.length > 2000) throw badRequest("回复内容不能超过 2000 个字");
+  ticket.messages ||= [];
+  ticket.messages.push({
+    id: id("msg"),
+    userId: user.id,
+    content: text,
+    createdAt: now,
+  });
+  ticket.status = user.role === "admin" ? "waiting_tenant" : "waiting_admin";
+  ticket.updatedAt = now;
+  appendLog(state, {
+    tenantId: ticket.tenantId,
+    userId: user.id,
+    action: user.role === "admin" ? "平台回复工单" : "租户回复工单",
+    target: ticket.id,
+    createdAt: now,
+  });
+  return ticket;
+}
+
+export function updateSupportTicketStatus(state, { user, ticketId, status, now = new Date().toISOString() }) {
+  reconcileState(state);
+  const ticket = findSupportTicketForUser(state, user, ticketId);
+  const nextStatus = String(status || "").trim();
+  if (!["open", "waiting_admin", "waiting_tenant", "closed"].includes(nextStatus)) throw badRequest("工单状态不正确");
+  if (nextStatus === "waiting_tenant" && user.role !== "admin") throw forbidden("只有管理员可以设置为待租户回复");
+  if (nextStatus === "waiting_admin" && user.role === "admin") throw badRequest("管理员回复后会自动变为待租户回复");
+  ticket.status = nextStatus;
+  ticket.updatedAt = now;
+  if (nextStatus === "closed") {
+    ticket.closedAt = now;
+    ticket.closedBy = user.id;
+  } else {
+    ticket.closedAt = null;
+    ticket.closedBy = null;
+  }
+  appendLog(state, {
+    tenantId: ticket.tenantId,
+    userId: user.id,
+    action: nextStatus === "closed" ? "关闭工单" : "更新工单状态",
+    target: `${ticket.id}:${nextStatus}`,
+    createdAt: now,
+  });
+  return ticket;
+}
+
+function findSupportTicketForUser(state, user, ticketId) {
+  const ticket = (state.supportTickets || []).find((item) => item.id === ticketId);
+  if (!ticket) throw notFound("工单不存在");
+  if (user.role === "admin") return ticket;
+  if (user.role !== "supervisor" || ticket.tenantId !== user.tenantId) throw forbidden("没有操作该工单的权限");
+  return ticket;
+}
+
+function normalizeTicketCategory(value) {
+  const category = String(value || "other").trim();
+  return ["account", "subscription", "wallet", "chain_sync", "business", "other"].includes(category) ? category : "other";
+}
+
+function normalizeTicketPriority(value) {
+  const priority = String(value || "normal").trim();
+  return ["low", "normal", "urgent"].includes(priority) ? priority : "normal";
 }
 
 const adminReadOnlyAuditActions = new Set([

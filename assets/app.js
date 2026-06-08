@@ -21,6 +21,7 @@
   const defaultLogFilters = () => ({ from: daysAgoInputValue(6), to: dateInputValue(new Date()) });
   const defaultReceivableFilters = () => ({});
   const defaultAccountFilters = () => ({ tenantStatus: "enabled", role: "supervisor" });
+  const defaultTicketFilters = () => ({ status: "", category: "", keyword: "", tenantId: "" });
   const statusMap = {
     unannotated: ["待批注", "orange"],
     pending: ["待审核", "amber"],
@@ -52,6 +53,25 @@
     rejected: ["平账已驳回", "red"],
     revoked: ["已撤销", "gray"],
   };
+  const ticketStatusMap = {
+    waiting_admin: ["待平台回复", "amber"],
+    waiting_tenant: ["待租户回复", "blue"],
+    open: ["处理中", "orange"],
+    closed: ["已关闭", "gray"],
+  };
+  const ticketCategoryMap = {
+    account: "账号登录",
+    subscription: "租用续费",
+    wallet: "钱包管理",
+    chain_sync: "链上同步",
+    business: "业务功能",
+    other: "其他问题",
+  };
+  const ticketPriorityMap = {
+    low: ["普通", "gray"],
+    normal: ["一般", "blue"],
+    urgent: ["紧急", "red"],
+  };
   const typeMap = { income: "进账", expense: "出账", transfer: "内部划转" };
   const supervisorLogActions = [
     "提交链上流水批注",
@@ -82,6 +102,10 @@
     "重置登录密码",
     "重置登录密钥",
     "提交租用续费哈希",
+    "提交工单",
+    "租户回复工单",
+    "关闭工单",
+    "更新工单状态",
     "导出往来款",
   ];
   const adminLogActions = [
@@ -107,6 +131,7 @@
     "链上钱包同步失败",
     "登录系统",
     "登录失败",
+    "平台回复工单",
   ];
 
   const seed = {
@@ -162,6 +187,7 @@
     platformPayments: [],
     receivablePayables: [],
     receivableSettlements: [],
+    supportTickets: [],
     subscriptionSettings: {
       monthlyFee: 100,
       firstOpenFee: 0,
@@ -188,6 +214,7 @@
   let logFilters = defaultLogFilters();
   let receivableFilters = defaultReceivableFilters();
   let accountFilters = defaultAccountFilters();
+  let ticketFilters = defaultTicketFilters();
   let logsPage = 1;
   let serverMetrics = null;
   let serverMetricsTimer = null;
@@ -266,6 +293,7 @@
       logsPage,
       receivableFilters,
       accountFilters,
+      ticketFilters,
     }));
   }
 
@@ -279,6 +307,7 @@
     if (Number.isInteger(Number(ui.logsPage)) && Number(ui.logsPage) > 0) logsPage = Number(ui.logsPage);
     if (ui.receivableFilters) receivableFilters = { ...defaultReceivableFilters(), ...ui.receivableFilters };
     if (ui.accountFilters) accountFilters = { ...defaultAccountFilters(), ...ui.accountFilters };
+    if (ui.ticketFilters) ticketFilters = { ...defaultTicketFilters(), ...ui.ticketFilters };
   }
 
   function applyLoadedState(nextState, { preserveUi = true } = {}) {
@@ -437,6 +466,36 @@
 
   function tenantSettlements() {
     return (state.receivableSettlements || []).filter((item) => item.tenantId === visibleTenantId());
+  }
+
+  function visibleTickets() {
+    const tickets = state.supportTickets || [];
+    if (currentUser().role === "admin") return tickets;
+    return tickets.filter((item) => item.tenantId === visibleTenantId());
+  }
+
+  function filteredTickets() {
+    return visibleTickets().filter((ticket) => {
+      if (currentUser().role === "admin" && ticketFilters.tenantId && ticket.tenantId !== ticketFilters.tenantId) return false;
+      if (ticketFilters.status && ticket.status !== ticketFilters.status) return false;
+      if (ticketFilters.category && ticket.category !== ticketFilters.category) return false;
+      if (ticketFilters.keyword) {
+        const text = `${ticket.title || ""} ${ticket.messages?.map((msg) => msg.content).join(" ") || ""} ${tenantName(ticket.tenantId)} ${userName(ticket.createdBy)}`;
+        if (!text.includes(ticketFilters.keyword)) return false;
+      }
+      return true;
+    }).sort((left, right) => {
+      const priority = { waiting_admin: 0, waiting_tenant: 1, open: 2, closed: 3 };
+      const statusDiff = (priority[left.status] ?? 2) - (priority[right.status] ?? 2);
+      if (statusDiff) return statusDiff;
+      const urgentDiff = ticketPriorityRank(right.priority) - ticketPriorityRank(left.priority);
+      if (urgentDiff) return urgentDiff;
+      return new Date(right.updatedAt || right.createdAt).getTime() - new Date(left.updatedAt || left.createdAt).getTime();
+    });
+  }
+
+  function ticketPriorityRank(priority) {
+    return ({ low: 0, normal: 1, urgent: 2 })[priority] ?? 1;
   }
 
   function settlementsForItem(itemId) {
@@ -765,6 +824,7 @@
     if (["admin", "supervisor"].includes(role)) nav.splice(2, 0, ["review", "审核中心"]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["users", "账号管理"]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["subscription", role === "admin" ? "租用管理" : "租用续费"]);
+    if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["tickets", "工单中心"]);
     if (role === "admin") nav.splice(-1, 0, ["admin", "系统管理"]);
     if (role === "admin") nav.splice(-1, 0, ["server", "服务器管理"]);
     nav.splice(-1, 0, ["profile", "我的账号"]);
@@ -779,6 +839,7 @@
     if (state.activeView === "admin" && role !== "admin") state.activeView = "dashboard";
     if (state.activeView === "server" && role !== "admin") state.activeView = "dashboard";
     if (state.activeView === "subscription" && !["admin", "supervisor"].includes(role)) state.activeView = "dashboard";
+    if (state.activeView === "tickets" && !["admin", "supervisor"].includes(role)) state.activeView = "dashboard";
     const views = {
       dashboard: renderDashboard,
       entries: renderEntries,
@@ -790,6 +851,7 @@
       users: renderUsers,
       admin: renderAdmin,
       subscription: renderSubscription,
+      tickets: renderTickets,
       server: renderServer,
       profile: renderProfile,
       help: renderHelp,
@@ -1793,6 +1855,171 @@
     </table></div>`;
   }
 
+  function renderTickets() {
+    const tickets = filteredTickets();
+    const allTickets = visibleTickets();
+    const waitingAdmin = allTickets.filter((ticket) => ticket.status === "waiting_admin").length;
+    const waitingTenant = allTickets.filter((ticket) => ticket.status === "waiting_tenant").length;
+    const closed = allTickets.filter((ticket) => ticket.status === "closed").length;
+    const action = currentUser().role === "supervisor"
+      ? `<button class="btn primary" data-action="open-ticket">提交工单</button>`
+      : "";
+    return `
+      ${pageHead("工单中心", currentUser().role === "admin" ? "处理租户提交的问题和沟通记录" : "向平台提交问题，并查看处理进度", action)}
+      <section class="stats-grid ticket-stats">
+        <div class="card ticket-stat admin"><span>待平台回复</span><strong>${waitingAdmin}</strong><small>平台需要处理</small></div>
+        <div class="card ticket-stat tenant"><span>待租户回复</span><strong>${waitingTenant}</strong><small>租户需要补充</small></div>
+        <div class="card ticket-stat closed"><span>已关闭</span><strong>${closed}</strong><small>已处理完成</small></div>
+      </section>
+      <section class="panel">
+        <div class="panel-title"><h3>工单列表</h3><span>${tickets.length} 条</span></div>
+        ${renderTicketFilters()}
+        ${renderTicketList(tickets)}
+      </section>
+    `;
+  }
+
+  function renderTicketFilters() {
+    return `<form id="ticketFilters" class="filters compact-filters">
+      ${currentUser().role === "admin" ? `<label>所属系统<select name="tenantId">
+        <option value="">全部系统</option>
+        ${state.tenants.map((tenant) => `<option value="${escapeHtml(tenant.id)}" ${ticketFilters.tenantId === tenant.id ? "selected" : ""}>${escapeHtml(tenant.name)}</option>`).join("")}
+      </select></label>` : ""}
+      <label>状态<select name="status">
+        <option value="">全部状态</option>
+        ${Object.entries(ticketStatusMap).map(([key, [label]]) => `<option value="${escapeHtml(key)}" ${ticketFilters.status === key ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+      </select></label>
+      <label>类型<select name="category">
+        <option value="">全部类型</option>
+        ${Object.entries(ticketCategoryMap).map(([key, label]) => `<option value="${escapeHtml(key)}" ${ticketFilters.category === key ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+      </select></label>
+      <label>关键词<input name="keyword" value="${escapeHtml(ticketFilters.keyword || "")}" placeholder="标题、内容、提交人"></label>
+      <div class="actions"><button class="btn primary" type="submit">查询</button><button class="btn" type="reset">清空</button></div>
+    </form>`;
+  }
+
+  function renderTicketList(tickets) {
+    if (!tickets.length) return `<div class="empty slim">暂无工单</div>`;
+    return `<div class="ticket-list">${tickets.map((ticket) => {
+      const last = ticket.messages?.at(-1);
+      const lastBy = last ? userName(last.userId) : "-";
+      return `<article class="ticket-card ticket-${escapeHtml(ticket.status)}">
+        <div class="ticket-card-head">
+          <div>
+            <h3>${escapeHtml(ticket.title)}</h3>
+            <p>${currentUser().role === "admin" ? `${escapeHtml(tenantName(ticket.tenantId))} · ` : ""}${escapeHtml(ticketCategoryMap[ticket.category] || "其他问题")} · ${escapeHtml(userName(ticket.createdBy))}</p>
+          </div>
+          <div class="ticket-badges">${badge(ticketPriorityMap, ticket.priority)}${badge(ticketStatusMap, ticket.status)}</div>
+        </div>
+        <p class="ticket-preview">${escapeHtml(last?.content || "")}</p>
+        <div class="ticket-foot">
+          <span>最近：${escapeHtml(lastBy)} · ${formatDate(ticket.updatedAt || ticket.createdAt)}</span>
+          <button class="btn" data-ticket-detail="${escapeHtml(ticket.id)}">查看处理</button>
+        </div>
+      </article>`;
+    }).join("")}</div>`;
+  }
+
+  function openTicketModal(ticket = null) {
+    const isNew = !ticket;
+    const messages = ticket?.messages || [];
+    const overlay = createFormModal({
+      title: isNew ? "提交工单" : "工单处理",
+      desc: isNew ? "请写清楚问题、影响范围和需要平台协助的内容。" : `${tenantName(ticket.tenantId)} · ${ticketCategoryMap[ticket.category] || "其他问题"}`,
+      body: isNew ? `
+        <label>问题类型<select name="category">
+          ${Object.entries(ticketCategoryMap).map(([key, label]) => `<option value="${escapeHtml(key)}">${escapeHtml(label)}</option>`).join("")}
+        </select></label>
+        <label>优先级<select name="priority"><option value="normal">一般</option><option value="urgent">紧急</option><option value="low">普通</option></select></label>
+        <label>工单标题<input name="title" maxlength="80" required placeholder="例如：续费哈希提交后未开通"></label>
+        <label>问题说明<textarea name="content" required maxlength="2000" placeholder="请描述问题、发生时间、相关钱包或交易哈希、希望平台协助的事项"></textarea></label>
+      ` : `
+        <section class="annotation-modal-summary ticket-summary">
+          <div><span>标题</span><strong>${escapeHtml(ticket.title)}</strong></div>
+          <div><span>状态</span><strong>${badge(ticketStatusMap, ticket.status)}</strong></div>
+          <div><span>类型</span><strong>${escapeHtml(ticketCategoryMap[ticket.category] || "其他问题")}</strong></div>
+          <div><span>优先级</span><strong>${badge(ticketPriorityMap, ticket.priority)}</strong></div>
+          <div><span>提交人</span><strong>${escapeHtml(userName(ticket.createdBy))}</strong></div>
+          <div><span>更新时间</span><strong>${formatDate(ticket.updatedAt || ticket.createdAt)}</strong></div>
+        </section>
+        <div class="ticket-thread">
+          ${messages.map((message) => renderTicketMessage(message)).join("")}
+        </div>
+        ${ticket.status === "closed" ? `<div class="notice">该工单已关闭，如需继续沟通可重新打开。</div>` : `
+          <label>回复内容<textarea name="content" maxlength="2000" required placeholder="补充处理结果、截图说明或需要对方确认的信息"></textarea></label>
+        `}
+      `,
+      submitText: isNew ? "提交工单" : ticket?.status === "closed" ? "关闭" : "提交回复",
+      confirmMessage: isNew ? "确认提交这张工单？" : ticket?.status === "closed" ? "" : "确认提交这条工单回复？",
+      onSubmit: async (formData, close) => {
+        if (isNew) {
+          await apiMutate("/api/support-tickets", {
+            body: {
+              category: formData.get("category"),
+              priority: formData.get("priority"),
+              title: formData.get("title"),
+              content: formData.get("content"),
+            },
+          });
+          close();
+          render();
+          toast("工单已提交，等待平台回复");
+          return;
+        }
+        if (ticket.status !== "closed") {
+          await apiMutate(`/api/support-tickets/${encodeURIComponent(ticket.id)}/replies`, {
+            body: { content: formData.get("content") },
+          });
+          close();
+          render();
+          toast("工单回复已提交");
+          return;
+        }
+        close();
+      },
+    });
+    document.body.append(overlay);
+    if (!isNew) {
+      overlay.querySelector(".form-modal-actions").insertAdjacentHTML("afterbegin", renderTicketStatusActions(ticket));
+      overlay.querySelectorAll("[data-ticket-status]").forEach((button) => button.addEventListener("click", async (event) => {
+        event.preventDefault();
+        const changed = await changeTicketStatus(ticket.id, button.dataset.ticketStatus);
+        if (changed) overlay.remove();
+      }));
+    }
+  }
+
+  function renderTicketMessage(message) {
+    const actor = state.users.find((item) => item.id === message.userId);
+    const side = actor?.role === "admin" ? "admin" : "tenant";
+    return `<article class="ticket-message ${side}">
+      <div><strong>${escapeHtml(userName(message.userId))}</strong><span>${formatDate(message.createdAt)}</span></div>
+      <p>${escapeHtml(message.content)}</p>
+    </article>`;
+  }
+
+  function renderTicketStatusActions(ticket) {
+    if (ticket.status === "closed") {
+      return `<button class="btn" type="button" data-ticket-status="${currentUser().role === "admin" ? "waiting_tenant" : "waiting_admin"}">重新打开</button>`;
+    }
+    const processing = ticket.status === "open" ? "" : `<button class="btn" type="button" data-ticket-status="open">标记处理中</button>`;
+    return `${processing}<button class="btn danger" type="button" data-ticket-status="closed">关闭工单</button>`;
+  }
+
+  async function changeTicketStatus(ticketId, status) {
+    const actionText = status === "closed" ? "关闭这张工单" : status === "open" ? "标记为处理中" : "重新打开这张工单";
+    if (!confirm(`确认${actionText}？`)) return false;
+    try {
+      await apiMutate(`/api/support-tickets/${encodeURIComponent(ticketId)}/status`, { method: "PATCH", body: { status } });
+      render();
+      toast(status === "closed" ? "工单已关闭" : "工单状态已更新");
+      return true;
+    } catch (error) {
+      toast(error.message);
+      return false;
+    }
+  }
+
   function renderAdmin() {
     if (currentUser().role !== "admin") return `<div class="panel empty">只有管理员可以进入系统管理</div>`;
     return `
@@ -2111,17 +2338,23 @@
           "请确认交易已经成功上链并获得确认后再提交。",
           "如果提交后没有自动完成续费，请联系平台处理。",
         ])}
-        ${helpSection("十、链上查询", [
+        ${helpSection("十、工单中心", [
+          "主管可通过工单中心向平台提交问题并查看处理进度。",
+          "适合提交工单的情况包括租用续费提交后状态没有变化、钱包同步异常、链上流水长时间未同步、账号登录或登录密钥需要协助处理、系统功能使用中遇到异常。",
+          "提交工单时建议写清楚问题发生时间、涉及的钱包或交易哈希、已经尝试过的处理方式，以及希望平台协助确认或处理的事项。",
+          "待平台回复表示平台需要查看或处理；待租户回复表示需要主管补充信息或确认；处理中表示问题正在跟进；已关闭表示问题已经处理完成。",
+        ])}
+        ${helpSection("十一、链上查询", [
           "链上查询用于手动核查交易哈希或钱包地址。",
           "可查询某笔交易是否已同步到系统，并核对交易哈希、链上时间、方向、金额和对方地址。",
           "链上查询只是查询工具，不等同于批注、平账或审核。",
         ])}
-        ${helpSection("十一、操作日志", [
-          "操作日志用于追踪系统内的重要业务和管理操作，包括提交批注、审核通过或驳回、修正、冲正、往来款提交、审核、平账、钱包变更、权限变更和续费处理等。",
+        ${helpSection("十二、操作日志", [
+          "操作日志用于追踪系统内的重要业务和管理操作，包括提交批注、审核通过或驳回、修正、冲正、往来款提交、审核、平账、钱包变更、权限变更、续费处理和工单处理等。",
           "主管可查看本系统业务相关日志，主要用于追踪提交、审核、调整、钱包、权限和续费处理。",
           "员工只能查看与自己相关的日志。",
         ])}
-        ${helpSection("十二、日常建议", [
+        ${helpSection("十三、日常建议", [
           "收付款发生后，应尽快处理对应链上流水批注。",
           "批注备注尽量写清楚客户、业务和用途，避免日后追溯困难。",
           "凭证图片建议保留关键交易信息、客户信息或业务凭据。",
@@ -2129,6 +2362,7 @@
           "发现链上流水和业务说明不一致时，优先驳回让员工补充或修改。",
           "应收应付尽量及时录入，避免平账时忘记业务来源。",
           "已通过记录需要调整时，使用修正或冲正，不要覆盖历史。",
+          "遇到续费、同步、账号或系统异常时，主管优先通过工单中心提交，方便保留处理记录。",
         ])}
       </section>
     `;
@@ -2289,6 +2523,7 @@
       logFilters = defaultLogFilters();
       logsPage = 1;
       receivableFilters = defaultReceivableFilters();
+      ticketFilters = defaultTicketFilters();
       save();
       render();
       refreshVisibleChainStatus();
@@ -2342,6 +2577,23 @@
       receivableFilters = defaultReceivableFilters();
       render();
     });
+    document.querySelector("#ticketFilters")?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      ticketFilters = { ...defaultTicketFilters(), ...Object.fromEntries(new FormData(event.target).entries()) };
+      saveUiState();
+      render();
+    });
+    document.querySelector("#ticketFilters")?.addEventListener("reset", (event) => {
+      event.preventDefault();
+      ticketFilters = defaultTicketFilters();
+      saveUiState();
+      render();
+    });
+    document.querySelector("[data-action='open-ticket']")?.addEventListener("click", () => openTicketModal());
+    document.querySelectorAll("[data-ticket-detail]").forEach((button) => button.addEventListener("click", () => {
+      const ticket = (state.supportTickets || []).find((item) => item.id === button.dataset.ticketDetail);
+      if (ticket) openTicketModal(ticket);
+    }));
     document.querySelector("#accountFilters")?.addEventListener("submit", (event) => {
       event.preventDefault();
       normalizeAccountFilters(Object.fromEntries(new FormData(event.target).entries()));
@@ -3761,6 +4013,7 @@
     state.platformPayments ||= [];
     state.receivablePayables ||= [];
     state.receivableSettlements ||= [];
+    state.supportTickets ||= [];
     state.subscriptionSettings ||= { monthlyFee: 100, firstOpenFee: 0, platformWalletAddress: "", enabled: false, autoDisable: true };
     state.subscriptionSettings.monthlyFee ||= 100;
     state.subscriptionSettings.firstOpenFee = Number(state.subscriptionSettings.firstOpenFee || 0);
