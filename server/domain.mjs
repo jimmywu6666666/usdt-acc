@@ -11,6 +11,8 @@ export function validateState(state) {
     return "categories.income 和 categories.expense 必须是数组";
   }
   if (state.platformPayments && !Array.isArray(state.platformPayments)) return "platformPayments 必须是数组";
+  if (state.receivablePayables && !Array.isArray(state.receivablePayables)) return "receivablePayables 必须是数组";
+  if (state.receivableSettlements && !Array.isArray(state.receivableSettlements)) return "receivableSettlements 必须是数组";
   return null;
 }
 
@@ -29,6 +31,8 @@ export function migrateAnnotationState(state) {
   state.auditLogs ||= [];
   state.walletBalanceSnapshots ||= [];
   state.platformPayments ||= [];
+  state.receivablePayables ||= [];
+  state.receivableSettlements ||= [];
   state.entries ||= [];
   state.legacyEntries ||= [];
   state.subscriptionSettings ||= {};
@@ -88,6 +92,9 @@ export function migrateAnnotationState(state) {
   }
   for (const tenant of state.tenants || []) {
     tenant.subscriptionStatus ||= tenant.subscriptionExpiresAt ? (new Date(tenant.subscriptionExpiresAt).getTime() >= Date.now() ? "active" : "expired") : "unset";
+  }
+  for (const item of state.receivablePayables || []) {
+    updateReceivablePayableStatus(state, item);
   }
   return state;
 }
@@ -341,6 +348,177 @@ export function restoreNonBusinessTransaction(state, { user, annotationId, now =
   annotation.reviewedAt = now;
   appendLog(state, { tenantId: annotation.tenantId, userId: user.id, action: "恢复非业务流水为待批注", target: annotation.id, createdAt: now });
   return annotation;
+}
+
+export function createReceivablePayable(state, { user, input, now = new Date().toISOString() }) {
+  reconcileState(state);
+  if (!["employee", "supervisor"].includes(user?.role)) throw forbidden("只有员工或主管可以创建往来款");
+  const tenantId = user.tenantId;
+  const type = String(input.type || "");
+  if (!["receivable", "payable"].includes(type)) throw badRequest("往来款类型不正确");
+  const amount = Number(input.amount);
+  if (!Number.isFinite(amount) || amount <= 0) throw badRequest("往来款金额必须大于 0");
+  const counterparty = String(input.counterparty || "").trim();
+  if (!counterparty) throw badRequest("请输入目标方");
+  const category = String(input.category || "").trim();
+  if (!category) throw badRequest("请选择分类");
+  const note = String(input.note || "").trim();
+  if (!note) throw badRequest("请输入业务说明");
+  const item = {
+    id: id("rp"),
+    tenantId,
+    type,
+    counterparty,
+    amount,
+    category,
+    note,
+    dueDate: input.dueDate || "",
+    attachmentName: input.attachmentName || "",
+    createdBy: user.id,
+    createdAt: now,
+    reviewStatus: user.role === "supervisor" ? "approved" : "pending",
+    reviewedBy: user.role === "supervisor" ? user.id : null,
+    reviewedAt: user.role === "supervisor" ? now : null,
+    rejectionReason: "",
+    status: "open",
+    voidedAt: null,
+    voidedBy: null,
+    voidReason: "",
+  };
+  state.receivablePayables.unshift(item);
+  appendLog(state, {
+    tenantId,
+    userId: user.id,
+    action: type === "receivable" ? "提交应收款" : "提交应付款",
+    target: `${counterparty}:${amount}`,
+    createdAt: now,
+  });
+  return updateReceivablePayableStatus(state, item);
+}
+
+export function reviewReceivablePayable(state, { user, itemId, action, rejectionReason = "", now = new Date().toISOString() }) {
+  reconcileState(state);
+  const item = state.receivablePayables.find((entry) => entry.id === itemId);
+  if (!item) throw notFound("往来款不存在");
+  assertSupervisor(state, user.id, item.tenantId);
+  if (item.reviewStatus !== "pending") throw badRequest("该往来款当前不在待审核状态");
+  if (action === "approve") {
+    item.reviewStatus = "approved";
+    item.rejectionReason = "";
+  } else if (action === "reject") {
+    const reason = String(rejectionReason || "").trim();
+    if (!reason) throw badRequest("请输入驳回原因");
+    item.reviewStatus = "rejected";
+    item.rejectionReason = reason;
+  } else {
+    throw badRequest("审核动作不正确");
+  }
+  item.reviewedBy = user.id;
+  item.reviewedAt = now;
+  appendLog(state, {
+    tenantId: item.tenantId,
+    userId: user.id,
+    action: action === "approve" ? "审核通过往来款" : "驳回往来款",
+    target: item.id,
+    createdAt: now,
+  });
+  return updateReceivablePayableStatus(state, item);
+}
+
+export function createReceivableSettlement(state, { user, itemId, txId, note = "", now = new Date().toISOString() }) {
+  reconcileState(state);
+  const item = state.receivablePayables.find((entry) => entry.id === itemId);
+  if (!item) throw notFound("往来款不存在");
+  if (user.role !== "admin" && item.tenantId !== user.tenantId) throw forbidden("没有操作该往来款的权限");
+  if (!["employee", "supervisor"].includes(user.role)) throw forbidden("只有员工或主管可以提交平账");
+  if (item.reviewStatus !== "approved") throw badRequest("往来款审核通过后才能平账");
+  if (item.status === "settled") throw badRequest("该往来款已平账");
+  if (item.status === "voided") throw badRequest("已作废往来款不能平账");
+  const tx = state.chainTransactions.find((entry) => entry.id === txId);
+  if (!tx || tx.tenantId !== item.tenantId) throw notFound("链上流水不存在");
+  if (!isManagedTransactionGroup(state, tx)) throw badRequest("历史无需批注流水不能用于平账");
+  const expectedDirection = item.type === "receivable" ? "income" : "expense";
+  if (tx.direction !== expectedDirection || tx.transactionType === "transfer") {
+    throw badRequest(item.type === "receivable" ? "应收款只能使用进账流水平账" : "应付款只能使用出账流水平账");
+  }
+  if (state.receivableSettlements.some((entry) => entry.txId === tx.id && !["rejected", "revoked"].includes(entry.status))) {
+    throw badRequest("该链上流水已用于往来款平账");
+  }
+  const settlement = {
+    id: id("rps"),
+    tenantId: item.tenantId,
+    itemId: item.id,
+    txId: tx.id,
+    amount: Number(tx.amount),
+    note: String(note || "").trim(),
+    status: user.role === "supervisor" ? "approved" : "pending",
+    submittedBy: user.id,
+    submittedAt: now,
+    reviewedBy: user.role === "supervisor" ? user.id : null,
+    reviewedAt: user.role === "supervisor" ? now : null,
+    rejectionReason: "",
+    revokedBy: null,
+    revokedAt: null,
+    revokeReason: "",
+  };
+  state.receivableSettlements.unshift(settlement);
+  updateReceivablePayableStatus(state, item);
+  appendLog(state, {
+    tenantId: item.tenantId,
+    userId: user.id,
+    action: user.role === "supervisor" ? "确认往来款平账" : "提交往来款平账",
+    target: `${item.id}:${tx.hash}:${settlement.amount}`,
+    createdAt: now,
+  });
+  return settlement;
+}
+
+export function reviewReceivableSettlement(state, { user, settlementId, action, rejectionReason = "", now = new Date().toISOString() }) {
+  reconcileState(state);
+  const settlement = state.receivableSettlements.find((entry) => entry.id === settlementId);
+  if (!settlement) throw notFound("平账记录不存在");
+  assertSupervisor(state, user.id, settlement.tenantId);
+  if (settlement.status !== "pending") throw badRequest("该平账当前不在待审核状态");
+  if (action === "approve") {
+    settlement.status = "approved";
+    settlement.rejectionReason = "";
+  } else if (action === "reject") {
+    const reason = String(rejectionReason || "").trim();
+    if (!reason) throw badRequest("请输入驳回原因");
+    settlement.status = "rejected";
+    settlement.rejectionReason = reason;
+  } else {
+    throw badRequest("审核动作不正确");
+  }
+  settlement.reviewedBy = user.id;
+  settlement.reviewedAt = now;
+  const item = state.receivablePayables.find((entry) => entry.id === settlement.itemId);
+  if (item) updateReceivablePayableStatus(state, item);
+  appendLog(state, {
+    tenantId: settlement.tenantId,
+    userId: user.id,
+    action: action === "approve" ? "审核通过往来款平账" : "驳回往来款平账",
+    target: settlement.id,
+    createdAt: now,
+  });
+  return settlement;
+}
+
+export function voidReceivablePayable(state, { user, itemId, reason, now = new Date().toISOString() }) {
+  reconcileState(state);
+  const item = state.receivablePayables.find((entry) => entry.id === itemId);
+  if (!item) throw notFound("往来款不存在");
+  assertSupervisor(state, user.id, item.tenantId);
+  if (approvedSettlementsForItem(state, item.id).length) throw badRequest("已有有效平账记录，不能作废");
+  const voidReason = String(reason || "").trim();
+  if (!voidReason) throw badRequest("请输入作废原因");
+  item.status = "voided";
+  item.reviewStatus = item.reviewStatus === "pending" ? "rejected" : item.reviewStatus;
+  item.voidedAt = now;
+  item.voidedBy = user.id;
+  item.voidReason = voidReason;
+  appendLog(state, { tenantId: item.tenantId, userId: user.id, action: "作废往来款", target: `${item.id}:${voidReason}`, createdAt: now });
+  return item;
 }
 
 export function getTransactionDetail(state, { user, txId }) {
@@ -1203,6 +1381,31 @@ function linkedTransferTransactions(state, tx) {
   if (!tx.pairedTxId) return [tx];
   const paired = state.chainTransactions.find((item) => item.id === tx.pairedTxId);
   return paired ? [tx, paired] : [tx];
+}
+
+function approvedSettlementsForItem(state, itemId) {
+  return (state.receivableSettlements || []).filter((settlement) => (
+    settlement.itemId === itemId && settlement.status === "approved"
+  ));
+}
+
+function updateReceivablePayableStatus(state, item) {
+  const paidAmount = approvedSettlementsForItem(state, item.id)
+    .reduce((sum, settlement) => sum + Number(settlement.amount || 0), 0);
+  item.settledAmount = Number(paidAmount.toFixed(6));
+  item.remainingAmount = Math.max(Number(item.amount || 0) - item.settledAmount, 0);
+  item.overAmount = Math.max(item.settledAmount - Number(item.amount || 0), 0);
+  if (item.status === "voided") return item;
+  if (item.reviewStatus !== "approved") {
+    item.status = "open";
+  } else if (item.settledAmount <= 0) {
+    item.status = "open";
+  } else if (item.settledAmount < Number(item.amount || 0)) {
+    item.status = "partial";
+  } else {
+    item.status = "settled";
+  }
+  return item;
 }
 
 function walletName(state, walletId) {

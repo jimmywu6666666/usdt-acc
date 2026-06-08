@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createAnnotation,
+  createReceivablePayable,
+  createReceivableSettlement,
   createCategory,
   createEmployee,
   createTenant,
@@ -22,6 +24,8 @@ import {
   restoreNonBusinessTransaction,
   resubmitAnnotation,
   reviewAnnotation,
+  reviewReceivablePayable,
+  reviewReceivableSettlement,
   searchChainTransactions,
   submitSubscriptionHash,
   syncChainTransactions,
@@ -417,6 +421,57 @@ test("wallet management start time cannot be older than 30 days", () => {
     },
     now: "2026-06-06T01:00:00.000Z",
   }), /最近 30 天/);
+});
+
+test("receivable and payable settlement uses full managed chain transaction", () => {
+  const state = ledgerState({
+    chainTransactions: [
+      {
+        id: "income_tx", tenantId: "tenant_alpha", walletId: "wallet", hash: "income_hash", direction: "income",
+        amount: 1005, counterparty: "TCustomer", confirmed: true, chainTime: "2026-06-05T12:30:00.000Z", currentAnnotationId: null,
+      },
+      {
+        id: "expense_tx", tenantId: "tenant_alpha", walletId: "wallet", hash: "expense_hash", direction: "expense",
+        amount: 400, counterparty: "TSupplier", confirmed: true, chainTime: "2026-06-05T13:30:00.000Z", currentAnnotationId: null,
+      },
+    ],
+  });
+  const receivable = createReceivablePayable(state, {
+    user: user(state, "emp"),
+    input: { type: "receivable", counterparty: "客户 A", amount: 1000, category: "客户货款", note: "订单 A" },
+  });
+  assert.equal(receivable.reviewStatus, "pending");
+  reviewReceivablePayable(state, { user: user(state, "sup"), itemId: receivable.id, action: "approve" });
+  const pendingSettlement = createReceivableSettlement(state, { user: user(state, "emp"), itemId: receivable.id, txId: "income_tx" });
+  assert.equal(pendingSettlement.amount, 1005);
+  assert.equal(pendingSettlement.status, "pending");
+  reviewReceivableSettlement(state, { user: user(state, "sup"), settlementId: pendingSettlement.id, action: "approve" });
+  assert.equal(receivable.status, "settled");
+  assert.equal(receivable.settledAmount, 1005);
+  assert.equal(receivable.overAmount, 5);
+  assert.throws(() => createReceivableSettlement(state, { user: user(state, "emp"), itemId: receivable.id, txId: "income_tx" }), /已平账|已用于/);
+});
+
+test("receivable settlement rejects wrong direction and historical transactions", () => {
+  const state = ledgerState({
+    wallets: [{ id: "wallet", tenantId: "tenant_alpha", alias: "主钱包", chain: "TRC20", address: "T123", enabled: true, managedFrom: "2026-06-06T00:00:00.000Z" }],
+    chainTransactions: [
+      {
+        id: "old_income", tenantId: "tenant_alpha", walletId: "wallet", hash: "old_income", direction: "income",
+        amount: 1000, counterparty: "TCustomer", confirmed: true, chainTime: "2026-06-05T12:30:00.000Z", currentAnnotationId: null,
+      },
+      {
+        id: "expense_tx", tenantId: "tenant_alpha", walletId: "wallet", hash: "expense_hash", direction: "expense",
+        amount: 1000, counterparty: "TSupplier", confirmed: true, chainTime: "2026-06-07T13:30:00.000Z", currentAnnotationId: null,
+      },
+    ],
+  });
+  const receivable = createReceivablePayable(state, {
+    user: user(state, "sup"),
+    input: { type: "receivable", counterparty: "客户 A", amount: 1000, category: "客户货款", note: "订单 A" },
+  });
+  assert.throws(() => createReceivableSettlement(state, { user: user(state, "emp"), itemId: receivable.id, txId: "old_income" }), /历史无需批注/);
+  assert.throws(() => createReceivableSettlement(state, { user: user(state, "emp"), itemId: receivable.id, txId: "expense_tx" }), /应收款只能使用进账/);
 });
 
 test("admin creates tenants and global categories", () => {

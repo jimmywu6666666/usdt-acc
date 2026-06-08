@@ -7,6 +7,8 @@ export function stateForUser(state, user) {
   safeState.editingAnnotationId = null;
   safeState.users = safeState.users.map(publicUser);
   safeState.annotations = safeState.annotations.map(annotationForClient);
+  safeState.receivablePayables ||= [];
+  safeState.receivableSettlements ||= [];
 
   if (user.role === "admin") {
     safeState.activeUserId = user.id;
@@ -37,6 +39,8 @@ export function stateForUser(state, user) {
   safeState.users = [...administrators, ...tenantUsers];
   safeState.wallets = safeState.wallets.filter((item) => item.tenantId === tenantId);
   safeState.walletBalanceSnapshots = (safeState.walletBalanceSnapshots || []).filter((item) => item.tenantId === tenantId);
+  safeState.receivablePayables = (safeState.receivablePayables || []).filter((item) => item.tenantId === tenantId);
+  safeState.receivableSettlements = (safeState.receivableSettlements || []).filter((item) => item.tenantId === tenantId);
   safeState.entries = (safeState.entries || []).filter((item) => item.tenantId === tenantId);
   safeState.legacyEntries = (safeState.legacyEntries || []).filter((item) => item.tenantId === tenantId);
 
@@ -56,6 +60,11 @@ export function stateForUser(state, user) {
     ));
     safeState.entries = safeState.entries.filter((item) => item.submittedBy === user.id);
     safeState.legacyEntries = safeState.legacyEntries.filter((item) => item.submittedBy === user.id);
+    safeState.receivablePayables = safeState.receivablePayables.filter((item) => item.createdBy === user.id);
+    const visibleItemIds = new Set(safeState.receivablePayables.map((item) => item.id));
+    safeState.receivableSettlements = safeState.receivableSettlements.filter((item) => (
+      visibleItemIds.has(item.itemId) || item.submittedBy === user.id
+    ));
   } else {
     safeState.chainTransactions = safeState.chainTransactions.filter((item) => item.tenantId === tenantId);
     safeState.annotations = safeState.annotations.filter((item) => item.tenantId === tenantId);

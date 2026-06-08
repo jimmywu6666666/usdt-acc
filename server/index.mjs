@@ -12,6 +12,8 @@ import {
   createCategory,
   createEmployee,
   createAnnotation,
+  createReceivablePayable,
+  createReceivableSettlement,
   createTenant,
   createWallet,
   disableWallet,
@@ -29,6 +31,8 @@ import {
   restoreNonBusinessTransaction,
   resubmitAnnotation,
   reviewAnnotation,
+  reviewReceivablePayable,
+  reviewReceivableSettlement,
   searchChainTransactions,
   submitSubscriptionHash,
   updateSubscriptionSettings,
@@ -37,6 +41,7 @@ import {
   updateEmployeePermission,
   updateTenantStatus,
   updateWalletManagedFrom,
+  voidReceivablePayable,
 } from "./domain.mjs";
 import { createSession, destroySession, getToken, publicUser, requireSession, verifyPassword } from "./auth.mjs";
 import { createStorage } from "./storage.mjs";
@@ -392,6 +397,80 @@ async function handleApi(req, res, pathname) {
       const { user } = await authenticate(current);
       const annotation = createAnnotation(current, { user, input: { ...body, attachment: null } });
       await storeAnnotationUpload(annotation, body.attachment);
+      return current;
+    });
+    respond(200, { ok: true, state });
+    return;
+  }
+
+  if (pathname === "/api/receivable-payables" && req.method === "POST") {
+    const body = await readJsonBody(req);
+    const state = await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      createReceivablePayable(current, { user, input: body });
+      return current;
+    });
+    respond(200, { ok: true, state });
+    return;
+  }
+
+  const receivableReview = pathname.match(/^\/api\/receivable-payables\/([^/]+)\/review$/);
+  if (receivableReview && req.method === "POST") {
+    const body = await readJsonBody(req);
+    const state = await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      reviewReceivablePayable(current, {
+        user,
+        itemId: receivableReview[1],
+        action: body.action,
+        rejectionReason: body.rejectionReason,
+      });
+      return current;
+    });
+    respond(200, { ok: true, state });
+    return;
+  }
+
+  const receivableVoid = pathname.match(/^\/api\/receivable-payables\/([^/]+)\/void$/);
+  if (receivableVoid && req.method === "POST") {
+    const body = await readJsonBody(req);
+    const state = await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      voidReceivablePayable(current, { user, itemId: receivableVoid[1], reason: body.reason });
+      return current;
+    });
+    respond(200, { ok: true, state });
+    return;
+  }
+
+  const receivableSettlement = pathname.match(/^\/api\/receivable-payables\/([^/]+)\/settlements$/);
+  if (receivableSettlement && req.method === "POST") {
+    const body = await readJsonBody(req);
+    const state = await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      createReceivableSettlement(current, {
+        user,
+        itemId: receivableSettlement[1],
+        txId: body.txId,
+        note: body.note,
+      });
+      return current;
+    });
+    respond(200, { ok: true, state });
+    return;
+  }
+
+  const settlementReview = pathname.match(/^\/api\/receivable-settlements\/([^/]+)\/review$/);
+  if (settlementReview && req.method === "POST") {
+    const body = await readJsonBody(req);
+    const state = await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      reviewReceivableSettlement(current, {
+        user,
+        settlementId: settlementReview[1],
+        action: body.action,
+        rejectionReason: body.rejectionReason,
+      });
       return current;
     });
     respond(200, { ok: true, state });

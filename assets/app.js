@@ -32,6 +32,24 @@
     historical: ["历史无需批注", "gray"],
     transfer_pending: ["内部划转待确认", "amber"],
   };
+  const rpTypeMap = { receivable: "应收款", payable: "应付款" };
+  const rpStatusMap = {
+    open: ["未平账", "orange"],
+    partial: ["部分平账", "amber"],
+    settled: ["已平账", "green"],
+    voided: ["已作废", "gray"],
+  };
+  const rpReviewMap = {
+    pending: ["待审核", "amber"],
+    approved: ["已通过", "green"],
+    rejected: ["已驳回", "red"],
+  };
+  const rpSettlementStatusMap = {
+    pending: ["平账待审核", "amber"],
+    approved: ["平账已通过", "green"],
+    rejected: ["平账已驳回", "red"],
+    revoked: ["已撤销", "gray"],
+  };
   const typeMap = { income: "进账", expense: "出账", transfer: "内部划转" };
   const supervisorLogActions = [
     "提交链上流水批注",
@@ -50,6 +68,15 @@
     "创建员工账号",
     "修改员工查看权限",
     "提交租用续费哈希",
+    "提交应收款",
+    "提交应付款",
+    "审核通过往来款",
+    "驳回往来款",
+    "提交往来款平账",
+    "确认往来款平账",
+    "审核通过往来款平账",
+    "驳回往来款平账",
+    "作废往来款",
   ];
   const adminLogActions = [
     ...supervisorLogActions,
@@ -125,6 +152,8 @@
     entries: [],
     legacyEntries: [],
     platformPayments: [],
+    receivablePayables: [],
+    receivableSettlements: [],
     subscriptionSettings: {
       monthlyFee: 100,
       platformWalletAddress: "",
@@ -346,6 +375,35 @@
       if (user.role !== "employee" || user.canViewAll) return true;
       return annotationsForTx(tx.id).some((annotation) => annotation.annotatedBy === user.id) || !tx.currentAnnotationId;
     });
+  }
+
+  function tenantReceivables() {
+    return (state.receivablePayables || []).filter((item) => item.tenantId === visibleTenantId());
+  }
+
+  function tenantSettlements() {
+    return (state.receivableSettlements || []).filter((item) => item.tenantId === visibleTenantId());
+  }
+
+  function settlementsForItem(itemId) {
+    return tenantSettlements().filter((settlement) => settlement.itemId === itemId)
+      .sort((left, right) => new Date(right.submittedAt).getTime() - new Date(left.submittedAt).getTime());
+  }
+
+  function isTxUsedForReceivable(txId) {
+    return (state.receivableSettlements || []).some((settlement) => (
+      settlement.txId === txId && !["rejected", "revoked"].includes(settlement.status)
+    ));
+  }
+
+  function receivableVisibleTransactions(item) {
+    const direction = item.type === "receivable" ? "income" : "expense";
+    return tenantTransactions().filter((tx) => (
+      tx.direction === direction
+      && tx.transactionType !== "transfer"
+      && isManagedTransaction(tx)
+      && !isTxUsedForReceivable(tx.id)
+    )).sort((left, right) => new Date(right.chainTime).getTime() - new Date(left.chainTime).getTime());
   }
 
   function isManagedTransaction(tx) {
@@ -588,6 +646,7 @@
     const nav = [
       ["dashboard", "总览"],
       ["entries", "流水账目"],
+      ["receivables", "往来款管理"],
       ["wallets", "钱包管理"],
       ["reconcile", "链上查询"],
       ["logs", "操作日志"],
@@ -613,6 +672,7 @@
       entries: renderEntries,
       new: renderNewAnnotation,
       review: renderReview,
+      receivables: renderReceivables,
       wallets: renderWallets,
       reconcile: renderChain,
       users: renderUsers,
@@ -986,6 +1046,94 @@
         <div class="actions">${showReviewActions ? `<button class="btn success" data-review-approve="${annotation.id}">审核通过</button><button class="btn danger" data-review-reject="${annotation.id}">驳回</button>` : ""}<button class="btn" data-detail="${tx.id}">历史</button></div>
       </article>`;
     }).join("")}</div>`;
+  }
+
+  function renderReceivables() {
+    const items = tenantReceivables().sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+    const stats = items.filter((item) => item.reviewStatus === "approved" && item.status !== "voided").reduce((acc, item) => {
+      const key = item.type;
+      acc[key].amount += Number(item.amount || 0);
+      acc[key].settled += Number(item.settledAmount || 0);
+      acc[key].remaining += Number(item.remainingAmount || 0);
+      acc[key].over += Number(item.overAmount || 0);
+      return acc;
+    }, {
+      receivable: { amount: 0, settled: 0, remaining: 0, over: 0 },
+      payable: { amount: 0, settled: 0, remaining: 0, over: 0 },
+    });
+    const canCreate = ["employee", "supervisor"].includes(currentUser().role);
+    return `
+      ${pageHead("往来款管理", "管理应收款和应付款，并用链上流水整笔平账")}
+      <section class="stats-grid rp-stats">
+        ${renderRpStat("应收总额", stats.receivable.amount, "应收已收", stats.receivable.settled, "未收", stats.receivable.remaining, "多收", stats.receivable.over)}
+        ${renderRpStat("应付总额", stats.payable.amount, "应付已付", stats.payable.settled, "未付", stats.payable.remaining, "多付", stats.payable.over)}
+      </section>
+      <section class="grid two-col receivable-layout">
+        ${canCreate ? `<div class="panel">
+          <div class="panel-title"><h3>新增往来款</h3><span>员工提交后由主管审核</span></div>
+          <form id="receivableForm" class="form-grid one">
+            <label>类型<select name="type"><option value="receivable">应收款</option><option value="payable">应付款</option></select></label>
+            <label>目标方<input name="counterparty" required placeholder="客户、供应商、合作方"></label>
+            <label>金额<input name="amount" type="number" min="0.000001" step="0.000001" required></label>
+            <label>分类<input name="category" required placeholder="客户货款、供应商款、保证金等"></label>
+            <label>到期日期<input name="dueDate" type="date"></label>
+            <label>业务说明<textarea name="note" required placeholder="客户信息、业务说明等"></textarea></label>
+            <div class="actions"><button class="btn primary" type="submit">提交往来款</button></div>
+          </form>
+        </div>` : ""}
+        <div class="panel ${canCreate ? "" : "wide-panel"}">
+          <div class="panel-title"><h3>往来款列表</h3><span>链上流水用于平账时必须整笔绑定</span></div>
+          ${renderReceivableTable(items)}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderRpStat(title, amount, settledLabel, settled, remainingLabel, remaining, overLabel, over) {
+    return `<div class="stat-card">
+      <span>${title}</span><strong>${money(amount)}</strong><small>USDT</small>
+      <div class="stat-breakdown"><span>${settledLabel}：${money(settled)}</span><span>${remainingLabel}：${money(remaining)}</span><span>${overLabel}：${money(over)}</span></div>
+    </div>`;
+  }
+
+  function renderReceivableTable(items) {
+    const rows = items.map((item) => {
+      const overText = Number(item.overAmount || 0) > 0 ? `<span class="${item.type === "receivable" ? "amount-income" : "amount-expense"}">${item.type === "receivable" ? "多收" : "多付"} ${money(item.overAmount)}</span>` : "-";
+      return `<tr>
+        <td>${formatDate(item.createdAt)}<br><span class="muted">${escapeHtml(userName(item.createdBy))}</span></td>
+        <td>${badge({ receivable: ["应收款", "green"], payable: ["应付款", "red"] }, item.type)}</td>
+        <td><strong>${escapeHtml(item.counterparty)}</strong><br><span class="muted">${escapeHtml(item.category)}</span></td>
+        <td>${money(item.amount)}</td>
+        <td>${money(item.settledAmount || 0)}</td>
+        <td>${money(item.remainingAmount || 0)}</td>
+        <td>${overText}</td>
+        <td>${badge(rpStatusMap, item.status)}<br>${badge(rpReviewMap, item.reviewStatus)}</td>
+        <td>${receivableActions(item)}</td>
+      </tr>`;
+    }).join("");
+    return `<div class="table-wrap"><table class="receivable-table">
+      <thead><tr><th>创建</th><th>类型</th><th>目标方/分类</th><th>金额</th><th>已平</th><th>剩余</th><th>差额</th><th>状态</th><th>操作</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="9" class="empty slim">暂无往来款</td></tr>`}</tbody>
+    </table></div>`;
+  }
+
+  function receivableActions(item) {
+    const actions = [`<button class="btn" data-rp-detail="${item.id}">详情</button>`];
+    if (canReview() && item.reviewStatus === "pending") {
+      actions.push(`<button class="btn success" data-rp-review="${item.id}" data-action="approve">通过</button>`);
+      actions.push(`<button class="btn danger" data-rp-review="${item.id}" data-action="reject">驳回</button>`);
+    }
+    if (["employee", "supervisor"].includes(currentUser().role) && item.reviewStatus === "approved" && !["settled", "voided"].includes(item.status)) {
+      actions.push(`<button class="btn primary" data-rp-settle="${item.id}">平账</button>`);
+    }
+    if (canReview() && !approvedSettlementsForReceivable(item.id).length && item.status !== "voided") {
+      actions.push(`<button class="btn warn" data-rp-void="${item.id}">作废</button>`);
+    }
+    return actions.join("");
+  }
+
+  function approvedSettlementsForReceivable(itemId) {
+    return tenantSettlements().filter((settlement) => settlement.itemId === itemId && settlement.status === "approved");
   }
 
   function renderWallets() {
@@ -1491,18 +1639,29 @@
           "请确认交易已经成功上链并获得确认后再提交。",
           "如果提交后没有自动完成续费，请联系平台处理。",
         ])}
-        ${helpSection("九、账号管理", [
+        ${helpSection("九、往来款管理", [
+          "往来款管理用于记录应收款和应付款，并用链上流水进行整笔平账。",
+          "员工可以提交应收款或应付款，主管审核通过后才能平账；主管创建的往来款直接生效。",
+          "应收款只能选择进账流水平账，应付款只能选择出账流水平账。",
+          "链上流水只要在钱包纳入管理时间之后即可用于平账，不要求先完成批注审核。",
+          "纳入管理时间之前的历史无需批注流水不能用于平账。",
+          "一笔链上流水只能绑定一笔往来款，且必须整笔用于平账，不能拆分或部分平账。",
+          "一笔往来款可以通过多笔链上流水分多次平账。",
+          "如果实际收付金额超过往来款金额，系统会显示多收或多付金额。",
+          "员工提交平账后由主管审核，主管自己提交的平账直接确认。",
+        ])}
+        ${helpSection("十、账号管理", [
           "主管可以创建员工账号，并设置员工是否允许查看全部账目。",
           "勾选查看全部账目时，员工可以查看本系统全部账目。",
           "取消勾选时，员工只能查看自己提交或需要自己处理的记录。",
           "员工无权限创建账号或修改其他员工权限。",
         ])}
-        ${helpSection("十、操作日志", [
+        ${helpSection("十一、操作日志", [
           "操作日志用于追踪系统内的重要业务和管理操作，包括提交批注、审核通过或驳回、修正、冲正、钱包变更、权限变更和续费处理等。",
           "主管可查看本系统业务相关日志，主要用于追踪提交、审核、调整、钱包、权限和续费处理。",
           "员工只能查看与自己相关的日志。",
         ])}
-        ${helpSection("十一、日常建议", [
+        ${helpSection("十二、日常建议", [
           "收付款发生后，应尽快处理对应链上流水批注。",
           "批注备注尽量写清楚客户、业务和用途，避免日后追溯困难。",
           "凭证图片建议保留关键交易信息、客户信息或业务凭据。",
@@ -1720,6 +1879,12 @@
     document.querySelector("#subscriptionSettingsForm")?.addEventListener("submit", submitSubscriptionSettings);
     document.querySelector("#systemSettingsForm")?.addEventListener("submit", submitSystemSettings);
     document.querySelector("#subscriptionHashForm")?.addEventListener("submit", submitSubscriptionHash);
+    document.querySelector("#receivableForm")?.addEventListener("submit", submitReceivable);
+    document.querySelectorAll("[data-rp-review]").forEach((button) => button.addEventListener("click", () => reviewReceivable(button.dataset.rpReview, button.dataset.action)));
+    document.querySelectorAll("[data-rp-settle]").forEach((button) => button.addEventListener("click", () => openReceivableSettlement(button.dataset.rpSettle)));
+    document.querySelectorAll("[data-rp-detail]").forEach((button) => button.addEventListener("click", () => openReceivableDetail(button.dataset.rpDetail)));
+    document.querySelectorAll("[data-rp-void]").forEach((button) => button.addEventListener("click", () => voidReceivable(button.dataset.rpVoid)));
+    document.querySelectorAll("[data-rps-review]").forEach((button) => button.addEventListener("click", () => reviewReceivableSettlement(button.dataset.rpsReview, button.dataset.action)));
     document.querySelectorAll("[data-manual-renew]").forEach((button) => button.addEventListener("click", () => manualRenewPayment(button.dataset.manualRenew)));
     document.querySelectorAll("[data-tenant-manual-renew]").forEach((button) => button.addEventListener("click", () => manualRenewTenant(button.dataset.tenantManualRenew)));
     document.querySelector("#categoryForm")?.addEventListener("submit", submitCategory);
@@ -1984,6 +2149,11 @@
       },
     });
     document.body.append(overlay);
+    overlay.querySelectorAll("[data-rps-review]").forEach((button) => button.addEventListener("click", async (event) => {
+      event.preventDefault();
+      await reviewReceivableSettlement(button.dataset.rpsReview, button.dataset.action);
+      overlay.remove();
+    }));
   }
 
   function reverseAnnotation(annotationId) {
@@ -2209,6 +2379,161 @@
     } catch (error) {
       toast(error.message);
     }
+  }
+
+  async function submitReceivable(event) {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(event.target).entries());
+    try {
+      await apiMutate("/api/receivable-payables", {
+        body: {
+          type: data.type,
+          counterparty: data.counterparty,
+          amount: Number(data.amount),
+          category: data.category,
+          dueDate: data.dueDate,
+          note: data.note,
+        },
+      });
+      render();
+      toast(currentUser().role === "supervisor" ? "往来款已创建" : "往来款已提交，等待主管审核");
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+
+  async function reviewReceivable(itemId, action) {
+    let rejectionReason = "";
+    if (action === "reject") {
+      rejectionReason = prompt("请输入驳回原因") || "";
+      if (!rejectionReason.trim()) return;
+    }
+    try {
+      await apiMutate(`/api/receivable-payables/${encodeURIComponent(itemId)}/review`, { body: { action, rejectionReason } });
+      render();
+      toast(action === "approve" ? "往来款已审核通过" : "往来款已驳回");
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+
+  function openReceivableSettlement(itemId) {
+    const item = tenantReceivables().find((entry) => entry.id === itemId);
+    if (!item) return;
+    const transactions = receivableVisibleTransactions(item);
+    const options = transactions.map((tx) => `<option value="${escapeHtml(tx.id)}">${formatDate(tx.chainTime)} · ${transactionWalletText(tx)} · ${money(tx.amount)} USDT · ${shortHash(tx.hash)}</option>`).join("");
+    const preview = transactions[0] ? renderReceivableSettlementPreview(item, transactions[0]) : `<div class="empty slim">暂无可用于平账的${item.type === "receivable" ? "进账" : "出账"}流水</div>`;
+    const overlay = createFormModal({
+      title: `提交${rpTypeMap[item.type]}平账`,
+      desc: "选择一笔链上流水，系统会按该流水整笔金额平账，不能拆分或部分平账。",
+      body: `
+        <section class="annotation-modal-summary">
+          <div><span>目标方</span><strong>${escapeHtml(item.counterparty)}</strong></div>
+          <div><span>剩余金额</span><strong>${money(item.remainingAmount || item.amount)} USDT</strong></div>
+          <div><span>类型</span><strong>${rpTypeMap[item.type]}</strong></div>
+          <div><span>状态</span><strong>${badge(rpStatusMap, item.status)}</strong></div>
+        </section>
+        <label>链上流水
+          <select name="txId" data-rp-tx ${transactions.length ? "" : "disabled"}>${options}</select>
+        </label>
+        <div data-rp-preview>${preview}</div>
+        <label>平账说明<textarea name="note" placeholder="可填写本次平账说明"></textarea></label>
+      `,
+      submitText: "提交平账",
+      onSubmit: async (formData, close) => {
+        await apiMutate(`/api/receivable-payables/${encodeURIComponent(item.id)}/settlements`, {
+          body: { txId: formData.get("txId"), note: formData.get("note") },
+        });
+        close();
+        render();
+        toast(currentUser().role === "supervisor" ? "平账已确认" : "平账已提交，等待主管审核");
+      },
+    });
+    document.body.append(overlay);
+    overlay.querySelector("[data-rp-tx]")?.addEventListener("change", (event) => {
+      const tx = transactions.find((entry) => entry.id === event.target.value);
+      overlay.querySelector("[data-rp-preview]").innerHTML = tx ? renderReceivableSettlementPreview(item, tx) : "";
+    });
+  }
+
+  function renderReceivableSettlementPreview(item, tx) {
+    const nextSettled = Number(item.settledAmount || 0) + Number(tx.amount || 0);
+    const over = Math.max(nextSettled - Number(item.amount || 0), 0);
+    const remaining = Math.max(Number(item.amount || 0) - nextSettled, 0);
+    return `<div class="settlement-preview">
+      ${renderAnnotationTxSummary(tx)}
+      <div class="notice ${over > 0 ? "chain-status-off" : "chain-status-ok"}">
+        本次将整笔平账 ${money(tx.amount)} USDT；平账后${remaining > 0 ? `剩余 ${money(remaining)} USDT` : "该往来款将结清"}${over > 0 ? `，${item.type === "receivable" ? "多收" : "多付"} ${money(over)} USDT` : ""}。
+      </div>
+    </div>`;
+  }
+
+  async function reviewReceivableSettlement(settlementId, action) {
+    let rejectionReason = "";
+    if (action === "reject") {
+      rejectionReason = prompt("请输入驳回原因") || "";
+      if (!rejectionReason.trim()) return;
+    }
+    try {
+      await apiMutate(`/api/receivable-settlements/${encodeURIComponent(settlementId)}/review`, { body: { action, rejectionReason } });
+      render();
+      toast(action === "approve" ? "平账已审核通过" : "平账已驳回");
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+
+  async function voidReceivable(itemId) {
+    const reason = prompt("请输入作废原因");
+    if (!reason?.trim()) return;
+    try {
+      await apiMutate(`/api/receivable-payables/${encodeURIComponent(itemId)}/void`, { body: { reason } });
+      render();
+      toast("往来款已作废");
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+
+  function openReceivableDetail(itemId) {
+    const item = tenantReceivables().find((entry) => entry.id === itemId);
+    if (!item) return;
+    const settlements = settlementsForItem(item.id);
+    const overlay = createFormModal({
+      title: `${rpTypeMap[item.type]}详情`,
+      desc: `${item.counterparty} · ${money(item.amount)} USDT`,
+      body: `
+        <section class="annotation-modal-summary">
+          <div><span>目标方</span><strong>${escapeHtml(item.counterparty)}</strong></div>
+          <div><span>金额</span><strong>${money(item.amount)} USDT</strong></div>
+          <div><span>已平账</span><strong>${money(item.settledAmount || 0)} USDT</strong></div>
+          <div><span>剩余</span><strong>${money(item.remainingAmount || 0)} USDT</strong></div>
+          <div><span>状态</span><strong>${badge(rpStatusMap, item.status)} ${badge(rpReviewMap, item.reviewStatus)}</strong></div>
+          <div><span>差额</span><strong>${Number(item.overAmount || 0) > 0 ? `${item.type === "receivable" ? "多收" : "多付"} ${money(item.overAmount)} USDT` : "-"}</strong></div>
+          <div class="wide"><span>说明</span><strong>${escapeHtml(item.note || "-")}</strong></div>
+        </section>
+        <div class="detail-list">
+          ${settlements.map((settlement) => renderSettlementDetailRow(settlement)).join("") || `<div class="empty slim">暂无平账记录</div>`}
+        </div>
+      `,
+      submitText: "关闭",
+      onSubmit: async (_, close) => close(),
+    });
+    document.body.append(overlay);
+  }
+
+  function renderSettlementDetailRow(settlement) {
+    const tx = state.chainTransactions.find((entry) => entry.id === settlement.txId);
+    return `<article class="detail-card">
+      <div class="detail-card-title"><strong>${money(settlement.amount)} USDT</strong>${badge(rpSettlementStatusMap, settlement.status)}</div>
+      <dl class="detail-grid compact">
+        <div><dt>提交人</dt><dd>${escapeHtml(userName(settlement.submittedBy))}</dd></div>
+        <div><dt>提交时间</dt><dd>${formatDate(settlement.submittedAt)}</dd></div>
+        <div class="wide"><dt>链上流水</dt><dd>${tx ? `${formatDate(tx.chainTime)} · ${transactionWalletText(tx)} · ${shortHash(tx.hash)}` : "-"}</dd></div>
+        ${settlement.status === "pending" && canReview() ? `<div class="wide actions"><button class="btn success" data-rps-review="${settlement.id}" data-action="approve">审核通过</button><button class="btn danger" data-rps-review="${settlement.id}" data-action="reject">驳回</button></div>` : ""}
+        ${settlement.rejectionReason ? `<div class="wide"><dt>驳回原因</dt><dd>${escapeHtml(settlement.rejectionReason)}</dd></div>` : ""}
+      </dl>
+    </article>`;
   }
 
   async function manualRenewPayment(paymentId) {
@@ -2653,6 +2978,8 @@
     state.auditLogs ||= [];
     state.walletBalanceSnapshots ||= [];
     state.platformPayments ||= [];
+    state.receivablePayables ||= [];
+    state.receivableSettlements ||= [];
     state.subscriptionSettings ||= { monthlyFee: 100, platformWalletAddress: "", enabled: false, autoDisable: true };
     state.subscriptionSettings.monthlyFee ||= 100;
     state.subscriptionSettings.platformWalletAddress ||= "";
