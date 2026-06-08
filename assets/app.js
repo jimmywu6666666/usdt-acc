@@ -190,8 +190,14 @@
   }
 
   function save() {
-    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    writeStoredState();
     saveUiState();
+  }
+
+  function writeStoredState() {
+    const snapshot = { ...state };
+    delete snapshot.chainStatus;
+    localStorage.setItem(STORE_KEY, JSON.stringify(snapshot));
   }
 
   function readUiState() {
@@ -237,7 +243,7 @@
       state.editingAnnotationId = ui.editingAnnotationId || null;
     }
     migrateState();
-    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    writeStoredState();
   }
 
   async function apiMutate(path, options = {}) {
@@ -1575,13 +1581,22 @@
     }
   }
 
+  function activeViewNeedsChainStatus() {
+    return ["wallets", "reconcile"].includes(state.activeView);
+  }
+
+  function refreshVisibleChainStatus() {
+    if (!session?.token || !activeViewNeedsChainStatus()) return;
+    refreshChainStatus().then(render);
+  }
+
   function bindEvents() {
     manageServerMetricsRefresh();
     document.querySelectorAll("[data-nav]").forEach((button) => button.addEventListener("click", () => {
       state.activeView = button.dataset.nav;
       state.editingAnnotationId = null;
       if (state.activeView === "logs") refreshLogs().then(render);
-      else if (["wallets", "reconcile"].includes(state.activeView)) refreshChainStatus().then(render);
+      else if (activeViewNeedsChainStatus()) refreshChainStatus().then(render);
       else if (state.activeView === "server") refreshServerMetrics().then(render);
       else render();
     }));
@@ -1593,6 +1608,7 @@
       logsPage = 1;
       save();
       render();
+      refreshVisibleChainStatus();
     });
     document.querySelector("[data-action='logout']")?.addEventListener("click", logout);
     document.querySelector("#filters")?.addEventListener("submit", (event) => {
@@ -2699,9 +2715,11 @@
     if (session?.token) {
       migrateState();
       restoreUiState();
+      delete state.chainStatus;
       save();
     }
     render();
+    refreshVisibleChainStatus();
   }
 
   init();
