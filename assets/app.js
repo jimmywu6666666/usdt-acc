@@ -1129,7 +1129,7 @@
             <label>目标方<input name="counterparty" required placeholder="客户、供应商、合作方"></label>
             <label>金额<input name="amount" type="number" min="0.000001" step="0.000001" required></label>
             <label>分类<input name="category" required placeholder="客户货款、供应商款、保证金等"></label>
-            <label>到期日期 <em class="optional-mark">选填</em><input name="dueDate" type="date"></label>
+            <label><span class="field-label">到期日期 <em class="optional-mark">选填</em></span><input name="dueDate" type="date"></label>
             <label>业务说明<textarea name="note" required placeholder="客户信息、业务说明等"></textarea></label>
             <div class="proof-field">
               <span>凭证上传 <em class="optional-mark">选填</em></span>
@@ -1385,7 +1385,7 @@
           <div class="panel-title"><h3>收费设置</h3><span>平台收款钱包用于租户续费，不计入租户业务流水</span></div>
           <form id="subscriptionSettingsForm" class="form-grid one">
             <label>月租费用（USDT）<input name="monthlyFee" type="number" min="0.000001" step="0.000001" value="${escapeHtml(settings.monthlyFee || 100)}" required></label>
-            <label>平台收款钱包地址 <em class="optional-mark">启用自动续费时填写</em><input name="platformWalletAddress" value="${escapeHtml(settings.platformWalletAddress || "")}" placeholder="T..."></label>
+            <label><span class="field-label">平台收款钱包地址 <em class="optional-mark">启用自动续费时填写</em></span><input name="platformWalletAddress" value="${escapeHtml(settings.platformWalletAddress || "")}" placeholder="T..."></label>
             <label class="checkline"><input name="enabled" type="checkbox" ${settings.enabled ? "checked" : ""}> 启用交易哈希自动续费</label>
             <p class="form-hint">勾选后，主管付款后可提交交易哈希，系统校验到账并自动续租；未勾选时只能由管理员手工处理。</p>
             <label class="checkline"><input name="autoDisable" type="checkbox" ${settings.autoDisable !== false ? "checked" : ""}> 到期后自动停用系统</label>
@@ -2551,7 +2551,7 @@
           <select name="txId" data-rp-tx ${transactions.length ? "" : "disabled"}>${options}</select>
         </label>
         <div data-rp-preview>${preview}</div>
-        <label>平账说明 <em class="optional-mark">选填</em><textarea name="note" placeholder="可填写本次平账说明"></textarea></label>
+        <label><span class="field-label">平账说明 <em class="optional-mark">选填</em></span><textarea name="note" placeholder="可填写本次平账说明"></textarea></label>
       `,
       submitText: "提交平账",
       onSubmit: async (formData, close) => {
@@ -2708,7 +2708,7 @@
           <label>续费月数<input name="months" type="number" min="0" step="1" value="1" required></label>
           <label>续费天数<input name="days" type="number" min="0" step="1" value="0" required></label>
         </div>
-        ${includeAmount ? `<label>实收金额 <em class="optional-mark">选填</em><input name="amount" type="number" min="0" step="0.000001" placeholder="例如 100"></label>` : ""}
+        ${includeAmount ? `<label><span class="field-label">实收金额 <em class="optional-mark">选填</em></span><input name="amount" type="number" min="0" step="0.000001" placeholder="例如 100"></label>` : ""}
         <label>处理原因<textarea name="reason" required placeholder="填写体外收费、金额异常或人工处理原因">${escapeHtml(defaultReason)}</textarea></label>
       `,
       submitText: "确认续费",
