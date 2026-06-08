@@ -1977,13 +1977,61 @@ tr:last-child td {
 }
 
 .annotation-modal-summary {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  padding: 10px;
+  padding: 12px 12px 12px 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel-soft);
+  overflow: hidden;
+}
+
+.annotation-modal-summary::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--muted);
+}
+
+.annotation-modal-summary.summary-income {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.annotation-modal-summary.summary-income::before {
+  background: var(--green);
+}
+
+.annotation-modal-summary.summary-expense {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+
+.annotation-modal-summary.summary-expense::before {
+  background: var(--red);
+}
+
+.annotation-modal-summary.summary-transfer {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.annotation-modal-summary.summary-transfer::before {
+  background: var(--blue);
+}
+
+.annotation-modal-summary .summary-item {
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.annotation-modal-summary .summary-item.highlight {
+  background: #fff;
 }
 
 .annotation-modal-summary .wide {
@@ -2003,6 +2051,36 @@ tr:last-child td {
   margin-top: 4px;
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.annotation-modal-summary .summary-item.amount strong {
+  font-size: 22px;
+}
+
+.annotation-modal-summary .summary-wallet {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 3px 9px;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 800;
+}
+
+.annotation-modal-summary .hash {
+  background: #fff;
+}
+
+.annotation-modal-summary .hash strong {
+  padding: 7px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 13px;
 }
 
 .empty.slim {

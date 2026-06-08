@@ -908,6 +908,17 @@
     return actions.join("");
   }
 
+  function renderAnnotationTxSummary(tx) {
+    const direction = transactionDirection(tx);
+    return `<section class="annotation-modal-summary summary-${direction}">
+      <div class="summary-item"><span>链上时间</span><strong>${formatDate(tx.chainTime)}</strong></div>
+      <div class="summary-item"><span>方向</span><strong>${directionPill(direction)}</strong></div>
+      <div class="summary-item highlight amount"><span>金额</span><strong class="amount-${direction}">${money(tx.amount)} USDT</strong></div>
+      <div class="summary-item"><span>钱包</span><strong><span class="summary-wallet">${escapeHtml(transactionWalletText(tx))}</span></strong></div>
+      <div class="summary-item wide hash"><span>交易哈希</span><strong class="mono">${escapeHtml(tx.hash)}</strong></div>
+    </section>`;
+  }
+
   function renderNewAnnotation() {
     const editing = state.annotations.find((annotation) => annotation.id === state.editingAnnotationId) || null;
     const editingTx = editing ? state.chainTransactions.find((tx) => tx.id === editing.chainTxId) : null;
@@ -925,9 +936,7 @@
               ${(editing ? [editingTx] : available).map((tx) => `<option value="${tx.id}" ${tx.id === selectedTx.id ? "selected" : ""}>${formatDate(tx.chainTime)} · ${typeMap[transactionDirection(tx)]} ${money(tx.amount)} · ${transactionWalletText(tx)}</option>`).join("")}
             </select>
           </label>
-          <div class="readonly-field"><span>金额</span><strong>${money(selectedTx.amount)} USDT</strong></div>
-          <div class="readonly-field"><span>钱包</span><strong>${transactionWalletText(selectedTx)}</strong></div>
-          <div class="readonly-field"><span>方向</span><strong>${typeMap[transactionDirection(selectedTx)]}</strong></div>
+          ${renderAnnotationTxSummary(selectedTx)}
           <label>分类<select name="category" required>${categories.map((category) => `<option ${category === editing?.category ? "selected" : ""}>${category}</option>`).join("")}</select></label>
           <div class="proof-field">
             <span>凭证上传</span>
@@ -1868,13 +1877,7 @@
       title: editing ? "修改并重新提交" : "批注链上流水",
       desc: "金额、钱包、方向和时间来自链上，只需要补充分类、业务说明和凭证。",
       body: `
-        <section class="annotation-modal-summary">
-          <div><span>链上时间</span><strong>${formatDate(tx.chainTime)}</strong></div>
-          <div><span>方向</span><strong>${typeMap[transactionDirection(tx)]}</strong></div>
-          <div><span>金额</span><strong>${money(tx.amount)} USDT</strong></div>
-          <div><span>钱包</span><strong>${escapeHtml(transactionWalletText(tx))}</strong></div>
-          <div class="wide"><span>交易哈希</span><strong class="mono">${escapeHtml(tx.hash)}</strong></div>
-        </section>
+        ${renderAnnotationTxSummary(tx)}
         <label>分类
           <select name="category" required>
             ${categories.map((category) => `<option value="${escapeHtml(category)}" ${category === editing?.category ? "selected" : ""}>${escapeHtml(category)}</option>`).join("")}
@@ -2011,13 +2014,7 @@
       title: "标记非业务流水",
       desc: "适用于测试充值、误转入、资金归集等无需进入业务收支统计的链上流水。",
       body: `
-        <section class="annotation-modal-summary">
-          <div><span>链上时间</span><strong>${formatDate(tx.chainTime)}</strong></div>
-          <div><span>方向</span><strong>${typeMap[transactionDirection(tx)]}</strong></div>
-          <div><span>金额</span><strong>${money(tx.amount)} USDT</strong></div>
-          <div><span>钱包</span><strong>${escapeHtml(transactionWalletText(tx))}</strong></div>
-          <div class="wide"><span>交易哈希</span><strong class="mono">${escapeHtml(tx.hash)}</strong></div>
-        </section>
+        ${renderAnnotationTxSummary(tx)}
         <label>非业务原因
           <textarea name="reason" required placeholder="例如：测试充值、误转入、资金归集、无需业务入账"></textarea>
         </label>
