@@ -46,7 +46,7 @@
     rejected: ["已驳回", "red"],
   };
   const rpSettlementStatusMap = {
-    pending: ["平账待审核", "amber"],
+    pending: ["待审核", "amber"],
     approved: ["平账已通过", "green"],
     rejected: ["平账已驳回", "red"],
     revoked: ["已撤销", "gray"],
@@ -1163,9 +1163,9 @@
     return `
       ${pageHead("审核中心", canReview() ? "审核批注、往来款和平账申请，确认业务说明、凭证和链上金额是否一致" : "查看当前系统待审核事项，便于排查和跟进")}
       ${canViewReviewCenter() ? `
-        <section class="review-section" data-review-section="annotations"><div class="section-label"><h3>批注待审核</h3><span>${pending.length} 条</span></div>${renderReviewCards(pending, canReview())}</section>
-        <section class="review-section" data-review-section="receivables"><div class="section-label"><h3>往来款待审核</h3><span>${pendingReceivables.length} 条</span></div>${renderReceivableReviewCards(pendingReceivables, canReview())}</section>
-        <section class="review-section" data-review-section="settlements"><div class="section-label"><h3>平账待审核</h3><span>${pendingSettlements.length} 条</span></div>${renderSettlementReviewCards(pendingSettlements, canReview())}</section>
+        <section class="review-section review-section-annotation" data-review-section="annotations"><div class="section-label"><h3>批注待审核</h3><span>${pending.length} 条</span></div>${renderReviewCards(pending, canReview())}</section>
+        <section class="review-section review-section-receivable" data-review-section="receivables"><div class="section-label"><h3>往来款待审核</h3><span>${pendingReceivables.length} 条</span></div>${renderReceivableReviewCards(pendingReceivables, canReview())}</section>
+        <section class="review-section review-section-settlement" data-review-section="settlements"><div class="section-label"><h3>平账待审核</h3><span>${pendingSettlements.length} 条</span></div>${renderSettlementReviewCards(pendingSettlements, canReview())}</section>
       ` : `<div class="panel empty">当前账号没有审核权限</div>`}
     `;
   }
@@ -1175,9 +1175,9 @@
     return `<div class="review-cards">${rows.map((annotation) => {
       const tx = state.chainTransactions.find((item) => item.id === annotation.chainTxId);
       const direction = transactionDirection(tx);
-      const specialReview = annotation.correctionType === "correction" ? "修正待审核" : annotation.correctionType === "reversal" ? "冲正待审核" : "批注待审核";
-      return `<article class="review-card review-${direction} ${annotation.correctionType ? `review-${annotation.correctionType}` : ""}">
-        <div class="review-card-head"><strong>${directionPill(direction)} <span class="amount-${direction}">${money(tx.amount)} USDT</span></strong><span class="review-status-group">${annotation.correctionType ? `<span class="badge blue">${specialReview}</span>` : ""}${badge(statusMap, "pending")}</span></div>
+      const reviewKind = annotation.correctionType === "correction" ? "修正审核" : annotation.correctionType === "reversal" ? "冲正审核" : "批注审核";
+      return `<article class="review-card review-card-annotation review-${direction} ${annotation.correctionType ? `review-${annotation.correctionType}` : ""}">
+        <div class="review-card-head"><strong><span class="review-kind review-kind-annotation">${reviewKind}</span>${directionPill(direction)} <span class="amount-${direction}">${money(tx.amount)} USDT</span></strong><span class="review-status-group">${badge(statusMap, "pending")}</span></div>
         <dl>
           <div><dt>链上时间</dt><dd>${formatDate(tx.chainTime)}</dd></div>
           <div><dt>钱包</dt><dd><span class="review-meta-tag wallet">${escapeHtml(transactionWalletText(tx))}</span></dd></div>
@@ -1195,8 +1195,8 @@
 
   function renderReceivableReviewCards(rows, showReviewActions = false) {
     if (!rows.length) return `<div class="panel empty slim">暂无待审核往来款</div>`;
-    return `<div class="review-cards">${rows.map((item) => `<article class="review-card review-${item.type === "receivable" ? "income" : "expense"}">
-      <div class="review-card-head"><strong>${badge({ receivable: ["应收款", "green"], payable: ["应付款", "red"] }, item.type)} <span>${money(item.amount)} USDT</span></strong>${badge(rpReviewMap, item.reviewStatus)}</div>
+    return `<div class="review-cards">${rows.map((item) => `<article class="review-card review-card-receivable review-${item.type === "receivable" ? "income" : "expense"}">
+      <div class="review-card-head"><strong><span class="review-kind review-kind-receivable">往来款审核</span>${badge({ receivable: ["应收款", "green"], payable: ["应付款", "red"] }, item.type)} <span>${money(item.amount)} USDT</span></strong>${badge(rpReviewMap, item.reviewStatus)}</div>
       <dl>
         <div><dt>目标方</dt><dd>${escapeHtml(item.counterparty)}</dd></div>
         <div><dt>分类</dt><dd>${escapeHtml(item.category)}</dd></div>
@@ -1218,8 +1218,8 @@
       const direction = transactionDirection(tx);
       const nextSettled = Number(item.settledAmount || 0) + Number(settlement.amount || 0);
       const over = Math.max(nextSettled - Number(item.amount || 0), 0);
-      return `<article class="review-card review-${direction}">
-        <div class="review-card-head"><strong>${directionPill(direction)} <span class="amount-${direction}">${money(settlement.amount)} USDT</span></strong>${badge(rpSettlementStatusMap, settlement.status)}</div>
+      return `<article class="review-card review-card-settlement review-${direction}">
+        <div class="review-card-head"><strong><span class="review-kind review-kind-settlement">平账审核</span>${directionPill(direction)} <span class="amount-${direction}">${money(settlement.amount)} USDT</span></strong>${badge(rpSettlementStatusMap, settlement.status)}</div>
         <dl>
           <div><dt>往来款</dt><dd>${rpTypeMap[item.type]} · ${escapeHtml(item.counterparty)}</dd></div>
           <div><dt>原始金额</dt><dd>${money(item.amount)} USDT</dd></div>
