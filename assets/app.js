@@ -1586,6 +1586,10 @@
   }
 
   function renderAccountFilters() {
+    normalizeAccountFilters();
+    const roleOptions = accountFilters.tenantStatus === "platform"
+      ? [["admin", "管理员"]]
+      : [["supervisor", "主管"], ["employee", "员工"], ["all", "全部角色"]];
     return `<form id="accountFilters" class="form-grid one compact-form">
       <label>所属系统状态<select name="tenantStatus">
         <option value="enabled" ${accountFilters.tenantStatus === "enabled" ? "selected" : ""}>启用中的系统</option>
@@ -1594,17 +1598,23 @@
         <option value="platform" ${accountFilters.tenantStatus === "platform" ? "selected" : ""}>平台账号</option>
       </select></label>
       <label>账号角色<select name="role">
-        <option value="supervisor" ${accountFilters.role === "supervisor" ? "selected" : ""}>主管</option>
-        <option value="employee" ${accountFilters.role === "employee" ? "selected" : ""}>员工</option>
-        <option value="admin" ${accountFilters.role === "admin" ? "selected" : ""}>管理员</option>
-        <option value="all" ${accountFilters.role === "all" ? "selected" : ""}>全部角色</option>
+        ${roleOptions.map(([value, label]) => `<option value="${value}" ${accountFilters.role === value ? "selected" : ""}>${label}</option>`).join("")}
       </select></label>
       <label>关键词<input name="keyword" value="${escapeHtml(accountFilters.keyword || "")}" placeholder="姓名、登录账号、系统"></label>
       <div class="actions"><button class="btn primary" type="submit">查询</button><button class="btn" type="reset">重置</button></div>
     </form>`;
   }
 
+  function normalizeAccountFilters(next = accountFilters) {
+    const normalized = { ...defaultAccountFilters(), ...next };
+    if (normalized.tenantStatus === "platform") normalized.role = "admin";
+    if (normalized.tenantStatus !== "platform" && normalized.role === "admin") normalized.role = "supervisor";
+    accountFilters = normalized;
+    return normalized;
+  }
+
   function filteredAdminUsers() {
+    normalizeAccountFilters();
     const keyword = String(accountFilters.keyword || "").trim();
     return state.users.filter((user) => {
       const tenant = user.tenantId ? state.tenants.find((item) => item.id === user.tenantId) : null;
@@ -2307,7 +2317,7 @@
     });
     document.querySelector("#accountFilters")?.addEventListener("submit", (event) => {
       event.preventDefault();
-      accountFilters = { ...defaultAccountFilters(), ...Object.fromEntries(new FormData(event.target).entries()) };
+      normalizeAccountFilters(Object.fromEntries(new FormData(event.target).entries()));
       save();
       render();
     });
