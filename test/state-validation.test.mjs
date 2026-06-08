@@ -665,6 +665,24 @@ test("receivable and payable settlement uses full managed chain transaction", ()
   assert.throws(() => createReceivableSettlement(state, { user: user(state, "emp"), itemId: receivable.id, txId: "income_tx" }), /已平账|已用于/);
 });
 
+test("admin can confirm receivable settlement for a tenant", () => {
+  const state = ledgerState({
+    chainTransactions: [{
+      id: "income_tx", tenantId: "tenant_alpha", walletId: "wallet", hash: "income_hash", direction: "income",
+      amount: 1688.88, counterparty: "TCustomer", confirmed: true, chainTime: "2026-06-09T01:27:39.000Z", currentAnnotationId: null,
+    }],
+  });
+  const receivable = createReceivablePayable(state, {
+    user: user(state, "sup"),
+    input: { type: "receivable", counterparty: "客户 A", amount: 1688.88, category: "客户货款", note: "订单 A" },
+  });
+  assert.equal(receivable.reviewStatus, "approved");
+  const settlement = createReceivableSettlement(state, { user: user(state, "admin"), itemId: receivable.id, txId: "income_tx" });
+  assert.equal(settlement.status, "approved");
+  assert.equal(settlement.reviewedBy, "admin");
+  assert.equal(receivable.status, "settled");
+});
+
 test("receivable settlement rejects wrong direction and historical transactions", () => {
   const state = ledgerState({
     wallets: [{ id: "wallet", tenantId: "tenant_alpha", alias: "主钱包", chain: "TRC20", address: "T123", enabled: true, managedFrom: "2026-06-06T00:00:00.000Z" }],

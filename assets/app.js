@@ -533,7 +533,7 @@
   }
 
   function canSettleTransaction(tx) {
-    return ["employee", "supervisor"].includes(currentUser().role)
+    return ["admin", "employee", "supervisor"].includes(currentUser().role)
       && tenantBusinessActive()
       && tx.transactionType !== "transfer"
       && tx.internalTransferStatus !== "pending"
@@ -3495,7 +3495,7 @@
         });
         close();
         render();
-        toast(currentUser().role === "supervisor" ? "平账已确认" : "平账已提交，等待主管审核");
+        toast(["admin", "supervisor"].includes(currentUser().role) ? "平账已确认" : "平账已提交，等待主管审核");
       },
     });
     document.body.append(overlay);

@@ -445,7 +445,7 @@ export function createReceivableSettlement(state, { user, itemId, txId, note = "
   if (!item) throw notFound("往来款不存在");
   assertTenantSubscriptionActive(state, item.tenantId);
   if (user.role !== "admin" && item.tenantId !== user.tenantId) throw forbidden("没有操作该往来款的权限");
-  if (!["employee", "supervisor"].includes(user.role)) throw forbidden("只有员工或主管可以提交平账");
+  if (!["admin", "employee", "supervisor"].includes(user.role)) throw forbidden("只有管理员、员工或主管可以提交平账");
   if (item.reviewStatus !== "approved") throw badRequest("往来款审核通过后才能平账");
   if (item.status === "settled") throw badRequest("该往来款已平账");
   if (item.status === "voided") throw badRequest("已作废往来款不能平账");
@@ -466,11 +466,11 @@ export function createReceivableSettlement(state, { user, itemId, txId, note = "
     txId: tx.id,
     amount: Number(tx.amount),
     note: String(note || "").trim(),
-    status: user.role === "supervisor" ? "approved" : "pending",
+    status: ["admin", "supervisor"].includes(user.role) ? "approved" : "pending",
     submittedBy: user.id,
     submittedAt: now,
-    reviewedBy: user.role === "supervisor" ? user.id : null,
-    reviewedAt: user.role === "supervisor" ? now : null,
+    reviewedBy: ["admin", "supervisor"].includes(user.role) ? user.id : null,
+    reviewedAt: ["admin", "supervisor"].includes(user.role) ? now : null,
     rejectionReason: "",
     revokedBy: null,
     revokedAt: null,
@@ -481,7 +481,7 @@ export function createReceivableSettlement(state, { user, itemId, txId, note = "
   appendLog(state, {
     tenantId: item.tenantId,
     userId: user.id,
-    action: user.role === "supervisor" ? "确认往来款平账" : "提交往来款平账",
+    action: ["admin", "supervisor"].includes(user.role) ? "确认往来款平账" : "提交往来款平账",
     target: `${item.id}:${tx.hash}:${settlement.amount}`,
     createdAt: now,
   });
