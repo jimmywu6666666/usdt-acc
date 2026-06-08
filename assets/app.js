@@ -405,14 +405,28 @@
     ));
   }
 
-  function receivableVisibleTransactions(item) {
-    const direction = item.type === "receivable" ? "income" : "expense";
-    return tenantTransactions().filter((tx) => (
-      tx.direction === direction
+  function receivablesForTransaction(tx) {
+    const type = transactionDirection(tx) === "income" ? "receivable" : "payable";
+    const txAmount = Number(tx.amount || 0);
+    return tenantReceivables().filter((item) => (
+      item.type === type
+      && item.reviewStatus === "approved"
+      && !["settled", "voided"].includes(item.status)
+    )).sort((left, right) => {
+      const leftDiff = Math.abs(Number(left.remainingAmount || left.amount || 0) - txAmount);
+      const rightDiff = Math.abs(Number(right.remainingAmount || right.amount || 0) - txAmount);
+      if (leftDiff !== rightDiff) return leftDiff - rightDiff;
+      return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+    });
+  }
+
+  function canSettleTransaction(tx) {
+    return ["employee", "supervisor"].includes(currentUser().role)
       && tx.transactionType !== "transfer"
+      && tx.internalTransferStatus !== "pending"
       && isManagedTransaction(tx)
       && !isTxUsedForReceivable(tx.id)
-    )).sort((left, right) => new Date(right.chainTime).getTime() - new Date(left.chainTime).getTime());
+      && receivablesForTransaction(tx).length > 0;
   }
 
   function isManagedTransaction(tx) {
@@ -1029,6 +1043,7 @@
   function transactionActions(tx, annotation) {
     const actions = [`<button class="btn" data-detail="${tx.id}">详情</button>`];
     if (!annotation && isManagedTransaction(tx) && tx.internalTransferStatus !== "pending") actions.push(`<button class="btn primary" data-annotate-tx="${tx.id}">批注</button>`);
+    if (canSettleTransaction(tx)) actions.push(`<button class="btn primary" data-settle-tx="${tx.id}">${transactionDirection(tx) === "income" ? "平应收" : "平应付"}</button>`);
     if (!annotation && isManagedTransaction(tx) && tx.internalTransferStatus !== "pending" && canManageNonBusiness()) actions.push(`<button class="btn warn" data-non-business="${tx.id}">非业务</button>`);
     if (annotation?.status === "non_business" && canManageNonBusiness()) actions.push(`<button class="btn" data-restore-non-business="${annotation.id}">恢复待批注</button>`);
     if (annotation?.status === "rejected" && canEditAnnotation(annotation)) actions.push(`<button class="btn primary" data-resubmit="${annotation.id}">修改重提</button>`);
@@ -1172,7 +1187,7 @@
     const stats = summarizeReceivables(items);
     const canCreate = ["employee", "supervisor"].includes(currentUser().role);
     return `
-      ${pageHead("往来款管理", "管理应收款和应付款，并用链上流水整笔平账", `<button class="btn primary" data-action="export-receivables">导出 CSV</button>`)}
+      ${pageHead("往来款管理", "管理应收款和应付款；平账从流水账目发起，先选链上流水再选往来款", `<button class="btn primary" data-action="export-receivables">导出 CSV</button>`)}
       <section class="stats-grid rp-stats">
         ${renderRpStat("应收总额", stats.receivable.amount, "应收已收", stats.receivable.settled, "未收", stats.receivable.remaining, "多收", stats.receivable.over, "receivable")}
         ${renderRpStat("应付总额", stats.payable.amount, "应付已付", stats.payable.settled, "未付", stats.payable.remaining, "多付", stats.payable.over, "payable")}
@@ -1203,7 +1218,7 @@
           </form>
         </div>` : ""}
         <div class="panel ${canCreate ? "" : "wide-panel"}">
-          <div class="panel-title"><h3>往来款列表</h3><span>链上流水用于平账时必须整笔绑定</span></div>
+          <div class="panel-title"><h3>往来款列表</h3><span>在流水账目中选择链上流水后提交平账</span></div>
           ${renderReceivableFilters()}
           ${renderReceivableTable(items)}
         </div>
@@ -1287,9 +1302,6 @@
     if (canReview() && item.reviewStatus === "pending") {
       actions.push(`<button class="btn success" data-rp-review="${item.id}" data-action="approve">通过</button>`);
       actions.push(`<button class="btn danger" data-rp-review="${item.id}" data-action="reject">驳回</button>`);
-    }
-    if (["employee", "supervisor"].includes(currentUser().role) && item.reviewStatus === "approved" && !["settled", "voided"].includes(item.status)) {
-      actions.push(`<button class="btn primary" data-rp-settle="${item.id}">平账</button>`);
     }
     if (canReview() && !approvedSettlementsForReceivable(item.id).length && item.status !== "voided") {
       actions.push(`<button class="btn warn" data-rp-void="${item.id}">作废</button>`);
@@ -1783,11 +1795,12 @@
           "冲正用于该笔不应继续计入业务收支的情况；冲正通过后链上流水仍保留，但不再计入业务统计。",
         ])}
         ${helpSection("六、往来款管理", [
-          "往来款管理用于记录应收款和应付款，并用链上流水进行整笔平账。",
+          "往来款管理用于记录和查看应收款、应付款。",
           "应收款表示别人欠本系统的钱，后续用进账流水平账；应付款表示本系统欠别人的钱，后续用出账流水平账。",
           "员工可以提交应收款或应付款，主管审核通过后才能平账；主管创建的往来款直接生效。",
           "提交往来款时可上传或粘贴凭证图片，方便主管审核业务来源和金额依据。",
-          "应收款只能选择进账流水平账，应付款只能选择出账流水平账。",
+          "平账从流水账目发起：先找到实际收款或付款的链上流水，再选择对应的应收款或应付款。",
+          "进账流水只能平应收款，出账流水只能平应付款。",
           "链上流水只要在钱包纳入管理时间之后即可用于平账，不要求先完成批注审核。",
           "纳入管理时间之前的历史无需批注流水不能用于平账。",
           "一笔链上流水只能绑定一笔往来款，且必须整笔用于平账，不能拆分或部分平账。",
@@ -2073,7 +2086,7 @@
     document.querySelector("#subscriptionHashForm")?.addEventListener("submit", submitSubscriptionHash);
     document.querySelector("#receivableForm")?.addEventListener("submit", submitReceivable);
     document.querySelectorAll("[data-rp-review]").forEach((button) => button.addEventListener("click", () => reviewReceivable(button.dataset.rpReview, button.dataset.action)));
-    document.querySelectorAll("[data-rp-settle]").forEach((button) => button.addEventListener("click", () => openReceivableSettlement(button.dataset.rpSettle)));
+    document.querySelectorAll("[data-settle-tx]").forEach((button) => button.addEventListener("click", () => openTransactionSettlement(button.dataset.settleTx)));
     document.querySelectorAll("[data-rp-detail]").forEach((button) => button.addEventListener("click", () => openReceivableDetail(button.dataset.rpDetail)));
     document.querySelectorAll("[data-rp-void]").forEach((button) => button.addEventListener("click", () => voidReceivable(button.dataset.rpVoid)));
     document.querySelectorAll("[data-rp-attachment]").forEach((button) => button.addEventListener("click", () => previewReceivableAttachment(button.dataset.rpAttachment)));
@@ -2647,32 +2660,31 @@
     }
   }
 
-  function openReceivableSettlement(itemId) {
-    const item = tenantReceivables().find((entry) => entry.id === itemId);
-    if (!item) return;
-    const transactions = receivableVisibleTransactions(item);
-    const options = transactions.map((tx) => `<option value="${escapeHtml(tx.id)}">${formatDate(tx.chainTime)} · ${transactionWalletText(tx)} · ${money(tx.amount)} USDT · ${shortHash(tx.hash)}</option>`).join("");
-    const preview = transactions[0] ? renderReceivableSettlementPreview(item, transactions[0]) : `<div class="empty slim">暂无可用于平账的${item.type === "receivable" ? "进账" : "出账"}流水</div>`;
+  function openTransactionSettlement(txId) {
+    const tx = tenantTransactions().find((entry) => entry.id === txId);
+    if (!tx) return;
+    const items = receivablesForTransaction(tx);
+    const options = items.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.counterparty)} · ${escapeHtml(item.category)} · 剩余 ${money(item.remainingAmount || item.amount)} USDT</option>`).join("");
+    const selected = items[0] || null;
+    const typeText = transactionDirection(tx) === "income" ? "应收款" : "应付款";
+    const preview = selected ? renderReceivableSettlementPreview(selected, tx, false) : `<div class="empty slim">暂无可用${typeText}。请先在往来款管理中创建并审核对应往来款。</div>`;
     const overlay = createFormModal({
-      title: `提交${rpTypeMap[item.type]}平账`,
-      desc: "选择一笔链上流水，系统会按该流水整笔金额平账，不能拆分或部分平账。",
+      title: `提交${typeText}平账`,
+      desc: "当前链上流水会整笔用于平账，不能拆分或部分平账。",
       body: `
-        <section class="annotation-modal-summary">
-          <div><span>目标方</span><strong>${escapeHtml(item.counterparty)}</strong></div>
-          <div><span>剩余金额</span><strong>${money(item.remainingAmount || item.amount)} USDT</strong></div>
-          <div><span>类型</span><strong>${rpTypeMap[item.type]}</strong></div>
-          <div><span>状态</span><strong>${badge(rpStatusMap, item.status)}</strong></div>
-        </section>
-        <label>链上流水
-          <select name="txId" data-rp-tx ${transactions.length ? "" : "disabled"}>${options}</select>
+        ${renderAnnotationTxSummary(tx)}
+        <label>选择${typeText}
+          <select name="itemId" data-rp-item ${items.length ? "" : "disabled"}>${options}</select>
         </label>
         <div data-rp-preview>${preview}</div>
         <label><span class="field-label">平账说明 <em class="optional-mark">选填</em></span><textarea name="note" placeholder="可填写本次平账说明"></textarea></label>
       `,
       submitText: "提交平账",
       onSubmit: async (formData, close) => {
-        await apiMutate(`/api/receivable-payables/${encodeURIComponent(item.id)}/settlements`, {
-          body: { txId: formData.get("txId"), note: formData.get("note") },
+        const itemId = formData.get("itemId");
+        if (!itemId) throw new Error(`暂无可用${typeText}`);
+        await apiMutate(`/api/receivable-payables/${encodeURIComponent(itemId)}/settlements`, {
+          body: { txId: tx.id, note: formData.get("note") },
         });
         close();
         render();
@@ -2680,18 +2692,24 @@
       },
     });
     document.body.append(overlay);
-    overlay.querySelector("[data-rp-tx]")?.addEventListener("change", (event) => {
-      const tx = transactions.find((entry) => entry.id === event.target.value);
-      overlay.querySelector("[data-rp-preview]").innerHTML = tx ? renderReceivableSettlementPreview(item, tx) : "";
+    overlay.querySelector("[data-rp-item]")?.addEventListener("change", (event) => {
+      const item = items.find((entry) => entry.id === event.target.value);
+      overlay.querySelector("[data-rp-preview]").innerHTML = item ? renderReceivableSettlementPreview(item, tx, false) : "";
     });
   }
 
-  function renderReceivableSettlementPreview(item, tx) {
+  function renderReceivableSettlementPreview(item, tx, includeTxSummary = true) {
     const nextSettled = Number(item.settledAmount || 0) + Number(tx.amount || 0);
     const over = Math.max(nextSettled - Number(item.amount || 0), 0);
     const remaining = Math.max(Number(item.amount || 0) - nextSettled, 0);
     return `<div class="settlement-preview">
-      ${renderAnnotationTxSummary(tx)}
+      ${includeTxSummary ? renderAnnotationTxSummary(tx) : ""}
+      <section class="annotation-modal-summary">
+        <div><span>往来款</span><strong>${escapeHtml(item.counterparty)}</strong></div>
+        <div><span>类型</span><strong>${rpTypeMap[item.type]}</strong></div>
+        <div><span>剩余金额</span><strong>${money(item.remainingAmount || item.amount)} USDT</strong></div>
+        <div><span>状态</span><strong>${badge(rpStatusMap, item.status)}</strong></div>
+      </section>
       <div class="notice ${over > 0 ? "chain-status-off" : "chain-status-ok"}">
         本次将整笔平账 ${money(tx.amount)} USDT；平账后${remaining > 0 ? `剩余 ${money(remaining)} USDT` : "该往来款将结清"}${over > 0 ? `，${item.type === "receivable" ? "多收" : "多付"} ${money(over)} USDT` : ""}。
       </div>
