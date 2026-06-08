@@ -1,7 +1,9 @@
 (function () {
   const STORE_KEY = "usdt-ledger-app:v2";
   const SESSION_KEY = "usdt-ledger-session:v1";
+  const UI_STATE_KEY = "usdt-ledger-ui:v1";
   const API_STATE = "/api/state";
+  const AUTO_REFRESH_MS = 30000;
   const nowIso = () => new Date().toISOString();
   const money = (value) => Number(value || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const dateInputValue = (date) => {
@@ -148,6 +150,8 @@
   let logsPage = 1;
   let serverMetrics = null;
   let serverMetricsTimer = null;
+  let autoRefreshTimer = null;
+  let autoRefreshInFlight = false;
   const ENTRY_PAGE_SIZE = 30;
   const LOG_PAGE_SIZE = 30;
 
@@ -187,6 +191,53 @@
 
   function save() {
     localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    saveUiState();
+  }
+
+  function readUiState() {
+    try {
+      return JSON.parse(localStorage.getItem(UI_STATE_KEY) || "null") || {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveUiState() {
+    if (!session?.token) return;
+    localStorage.setItem(UI_STATE_KEY, JSON.stringify({
+      activeView: state.activeView,
+      activeTenantId: state.activeTenantId,
+      entryFilters,
+      entriesPage,
+      logFilters,
+      logsPage,
+    }));
+  }
+
+  function restoreUiState() {
+    const ui = readUiState();
+    if (ui.activeView) state.activeView = ui.activeView;
+    if (ui.activeTenantId && currentUser().role === "admin") state.activeTenantId = ui.activeTenantId;
+    if (ui.entryFilters) entryFilters = { ...defaultEntryFilters(), ...ui.entryFilters };
+    if (Number.isInteger(Number(ui.entriesPage)) && Number(ui.entriesPage) > 0) entriesPage = Number(ui.entriesPage);
+    if (ui.logFilters) logFilters = { ...defaultLogFilters(), ...ui.logFilters };
+    if (Number.isInteger(Number(ui.logsPage)) && Number(ui.logsPage) > 0) logsPage = Number(ui.logsPage);
+  }
+
+  function applyLoadedState(nextState, { preserveUi = true } = {}) {
+    const ui = preserveUi ? {
+      activeView: state.activeView,
+      activeTenantId: state.activeTenantId,
+      editingAnnotationId: state.editingAnnotationId,
+    } : {};
+    state = nextState;
+    if (preserveUi) {
+      state.activeView = ui.activeView;
+      if (ui.activeTenantId && currentUser().role === "admin") state.activeTenantId = ui.activeTenantId;
+      state.editingAnnotationId = ui.editingAnnotationId || null;
+    }
+    migrateState();
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
   }
 
   async function apiMutate(path, options = {}) {
@@ -205,13 +256,8 @@
       throw new Error(payload.error || "操作失败");
     }
     if (payload.state) {
-      const activeView = state.activeView;
-      const editingAnnotationId = state.editingAnnotationId;
-      state = payload.state;
-      state.activeView = activeView;
-      state.editingAnnotationId = editingAnnotationId;
-      migrateState();
-      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+      applyLoadedState(payload.state);
+      saveUiState();
     }
     return payload;
   }
@@ -439,10 +485,12 @@
   function render() {
     const app = document.querySelector("#app");
     if (!session?.token) {
+      stopAutoRefresh();
       app.innerHTML = renderLogin();
       bindLoginEvents();
       return;
     }
+    startAutoRefresh();
     app.innerHTML = `
       <header class="topbar">
         <div class="brand">
@@ -469,6 +517,7 @@
         <main class="main">${renderView()}</main>
       </div>
     `;
+    saveUiState();
     bindEvents();
   }
 
@@ -1478,6 +1527,54 @@
     </div>`;
   }
 
+  function startAutoRefresh() {
+    if (autoRefreshTimer || !session?.token) return;
+    autoRefreshTimer = setInterval(refreshStateInBackground, AUTO_REFRESH_MS);
+  }
+
+  function stopAutoRefresh() {
+    if (!autoRefreshTimer) return;
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+
+  function shouldSkipAutoRefresh() {
+    if (!session?.token || autoRefreshInFlight) return true;
+    if (document.hidden) return true;
+    if (document.querySelector(".form-modal, .proof-modal")) return true;
+    const active = document.activeElement;
+    if (active && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName)) return true;
+    if (state.activeView === "new" || state.editingAnnotationId) return true;
+    return false;
+  }
+
+  async function refreshStateInBackground() {
+    if (shouldSkipAutoRefresh()) return;
+    autoRefreshInFlight = true;
+    try {
+      const response = await fetch(API_STATE, { headers: authHeaders() });
+      if (response.status === 401) {
+        session = null;
+        localStorage.removeItem(SESSION_KEY);
+        render();
+        return;
+      }
+      if (!response.ok) return;
+      const payload = await response.json();
+      if (!payload.state) return;
+      const scrollX = window.scrollX;
+      const scrollY = window.scrollY;
+      applyLoadedState(payload.state);
+      if (["wallets", "reconcile"].includes(state.activeView)) await refreshChainStatus();
+      render();
+      window.scrollTo(scrollX, scrollY);
+    } catch {
+      // Keep the current screen usable when the network is temporarily unavailable.
+    } finally {
+      autoRefreshInFlight = false;
+    }
+  }
+
   function bindEvents() {
     manageServerMetricsRefresh();
     document.querySelectorAll("[data-nav]").forEach((button) => button.addEventListener("click", () => {
@@ -1679,6 +1776,7 @@
       logFilters = defaultLogFilters();
       logsPage = 1;
       migrateState();
+      saveUiState();
       save();
       render();
       toast("登录成功");
@@ -1691,6 +1789,8 @@
     await fetch("/api/auth/logout", { method: "POST", headers: authHeaders() }).catch(() => {});
     session = null;
     localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(UI_STATE_KEY);
+    stopAutoRefresh();
     render();
   }
 
@@ -2598,6 +2698,7 @@
     state = await load();
     if (session?.token) {
       migrateState();
+      restoreUiState();
       save();
     }
     render();
