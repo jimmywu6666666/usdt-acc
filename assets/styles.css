@@ -869,6 +869,15 @@ button {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel-soft);
+  cursor: zoom-in;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.ticket-thread:hover,
+.ticket-thread:focus-visible {
+  border-color: #93c5fd;
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.12);
+  outline: none;
 }
 
 .ticket-message {
@@ -879,16 +888,6 @@ button {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
-  cursor: zoom-in;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
-}
-
-.ticket-message:hover,
-.ticket-message:focus-visible {
-  border-color: #93c5fd;
-  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.12);
-  outline: none;
-  transform: translateY(-1px);
 }
 
 .ticket-message.admin {
@@ -970,7 +969,7 @@ button {
 .ticket-message-viewer-dialog {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  width: min(720px, 100%);
+  width: min(760px, 100%);
   max-height: calc(100dvh - 32px);
   overflow: hidden;
   border: 1px solid var(--line);
@@ -1014,7 +1013,47 @@ button {
   -webkit-overflow-scrolling: touch;
 }
 
-.ticket-message-viewer-body p {
+.ticket-message-viewer-item {
+  display: grid;
+  gap: 8px;
+  width: min(88%, 580px);
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.ticket-message-viewer-item.admin {
+  justify-self: end;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.ticket-message-viewer-item.tenant {
+  justify-self: start;
+  border-color: #ccfbf1;
+  background: #f0fdfa;
+}
+
+.ticket-message-viewer-meta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.ticket-message-viewer-meta strong,
+.ticket-message-viewer-meta span {
+  min-width: 0;
+}
+
+.ticket-message-viewer-meta span {
+  flex: 0 0 auto;
+}
+
+.ticket-message-viewer-item p {
   margin: 0;
   color: var(--text);
   font-size: 17px;
@@ -2957,6 +2996,18 @@ tr:last-child td {
 
   .ticket-message-viewer-body p {
     font-size: 16px;
+  }
+
+  .ticket-message-viewer-item {
+    width: 100%;
+  }
+
+  .ticket-message-viewer-meta {
+    display: grid;
+  }
+
+  .ticket-message-viewer-meta span {
+    flex: initial;
   }
 
   .ticket-message-viewer-actions {

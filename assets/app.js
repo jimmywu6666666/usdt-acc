@@ -1959,7 +1959,7 @@
             <div><span>更新时间</span><strong>${formatDate(ticket.updatedAt || ticket.createdAt)}</strong></div>
           </div>
         </section>
-        <div class="ticket-thread">
+        <div class="ticket-thread" role="button" tabindex="0" data-ticket-thread data-ticket-id="${escapeHtml(ticket.id)}" aria-label="查看完整工单对话">
           ${messages.map((message) => renderTicketMessage(ticket, message)).join("")}
         </div>
         ${ticket.status === "closed" ? `<div class="notice">该工单已关闭，继续回复会自动重新打开。</div>` : ""}
@@ -2000,16 +2000,16 @@
       overlay.querySelectorAll("[data-ticket-attachment]").forEach((button) => button.addEventListener("click", () => {
         previewTicketAttachment(button.dataset.ticketId, button.dataset.messageId);
       }));
-      overlay.querySelectorAll("[data-ticket-message]").forEach((messageNode) => {
-        const openMessage = () => openTicketMessageViewer(ticket.id, messageNode.dataset.messageId);
-        messageNode.addEventListener("click", (event) => {
+      overlay.querySelectorAll("[data-ticket-thread]").forEach((threadNode) => {
+        const openThread = () => openTicketThreadViewer(threadNode.dataset.ticketId);
+        threadNode.addEventListener("click", (event) => {
           if (event.target.closest("[data-ticket-attachment]")) return;
-          openMessage();
+          openThread();
         });
-        messageNode.addEventListener("keydown", (event) => {
+        threadNode.addEventListener("keydown", (event) => {
           if (event.key !== "Enter" && event.key !== " ") return;
           event.preventDefault();
-          openMessage();
+          openThread();
         });
       });
       overlay.querySelector(".form-modal-actions").insertAdjacentHTML("afterbegin", renderTicketStatusActions(ticket));
@@ -2024,31 +2024,41 @@
   function renderTicketMessage(ticket, message) {
     const actor = state.users.find((item) => item.id === message.userId);
     const side = actor?.role === "admin" ? "admin" : "tenant";
-    return `<article class="ticket-message ${side}" role="button" tabindex="0" data-ticket-message data-message-id="${escapeHtml(message.id)}" aria-label="查看工单消息详情">
+    return `<article class="ticket-message ${side}">
       <div class="ticket-message-head"><strong>${escapeHtml(userName(message.userId))}</strong><span>${formatDate(message.createdAt)}</span></div>
       <p class="ticket-message-content">${escapeHtml(message.content)}</p>
       ${message.attachmentName ? `<div class="ticket-attachment-row"><button class="ticket-attachment-button" type="button" data-ticket-attachment data-ticket-id="${escapeHtml(ticket.id)}" data-message-id="${escapeHtml(message.id)}">${escapeHtml(message.attachmentName)}</button></div>` : ""}
     </article>`;
   }
 
-  function openTicketMessageViewer(ticketId, messageId) {
+  function openTicketThreadViewer(ticketId) {
     const ticket = state.supportTickets.find((item) => item.id === ticketId);
-    const message = ticket?.messages?.find((item) => item.id === messageId);
-    if (!ticket || !message) return;
+    const messages = ticket?.messages || [];
+    if (!ticket) return;
     const overlay = document.createElement("div");
     overlay.className = "ticket-message-viewer";
     overlay.innerHTML = `
-      <section class="ticket-message-viewer-dialog" role="dialog" aria-modal="true" aria-label="工单消息详情">
+      <section class="ticket-message-viewer-dialog" role="dialog" aria-modal="true" aria-label="完整工单对话">
         <div class="ticket-message-viewer-head">
           <div>
-            <strong>${escapeHtml(userName(message.userId))}</strong>
-            <span>${formatDate(message.createdAt)}</span>
+            <strong>${escapeHtml(ticket.title)}</strong>
+            <span>${escapeHtml(ticketCategoryMap[ticket.category] || "其他问题")} · ${messages.length} 条回复</span>
           </div>
           <button class="btn pagination-icon" type="button" data-ticket-message-close aria-label="关闭">×</button>
         </div>
         <div class="ticket-message-viewer-body">
-          <p>${escapeHtml(message.content)}</p>
-          ${message.attachmentName ? `<button class="ticket-attachment-button" type="button" data-ticket-attachment data-ticket-id="${escapeHtml(ticket.id)}" data-message-id="${escapeHtml(message.id)}">${escapeHtml(message.attachmentName)}</button>` : ""}
+          ${messages.map((message) => {
+            const actor = state.users.find((item) => item.id === message.userId);
+            const side = actor?.role === "admin" ? "admin" : "tenant";
+            return `<article class="ticket-message-viewer-item ${side}">
+              <div class="ticket-message-viewer-meta">
+                <strong>${escapeHtml(userName(message.userId))}</strong>
+                <span>${formatDate(message.createdAt)}</span>
+              </div>
+              <p>${escapeHtml(message.content)}</p>
+              ${message.attachmentName ? `<button class="ticket-attachment-button" type="button" data-ticket-attachment data-ticket-id="${escapeHtml(ticket.id)}" data-message-id="${escapeHtml(message.id)}">${escapeHtml(message.attachmentName)}</button>` : ""}
+            </article>`;
+          }).join("")}
         </div>
         <div class="ticket-message-viewer-actions">
           <button class="btn primary" type="button" data-ticket-message-close>关闭</button>
@@ -2433,7 +2443,7 @@
           "主管可通过工单中心向平台提交问题并查看处理进度。",
           "适合提交工单的情况包括租用续费提交后状态没有变化、钱包同步异常、链上流水长时间未同步、账号登录或登录密钥需要协助处理、系统功能使用中遇到异常。",
           "提交工单时建议写清楚问题发生时间、涉及的钱包或交易哈希、已经尝试过的处理方式，以及希望平台协助确认或处理的事项。",
-          "如有错误页面、链上截图或转账凭证，可上传图片附件，也可以直接粘贴截图。",
+          "如有错误页面、链上截图或转账凭证，可上传图片附件，也可以直接粘贴截图；点击对话区域可放大查看完整沟通记录。",
           "待平台回复表示平台需要查看或处理；待租户回复表示需要主管补充信息或确认；处理中表示问题正在跟进；已关闭表示问题已经处理完成。",
           "待租户回复超过 3 天未回复时，工单列表会显示提醒；第 4 天仍未回复会自动关闭，关闭后可通过回复自动重新打开。",
           "已关闭工单仍可继续回复，提交回复后会自动重新打开并转为待对方回复。",
