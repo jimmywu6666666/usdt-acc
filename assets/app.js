@@ -67,6 +67,7 @@
     "停用钱包",
     "启用钱包",
     "创建员工账号",
+    "创建主管账号",
     "修改员工查看权限",
     "提交租用续费哈希",
     "提交应收款",
@@ -118,11 +119,11 @@
       { id: "tenant_beta", name: "Beta 团队", enabled: true, subscriptionExpiresAt: "", subscriptionStatus: "unset", createdAt: nowIso() },
     ],
     users: [
-      { id: "user_admin", tenantId: null, name: "平台管理员", role: "admin", canViewAll: true },
-      { id: "user_sup_a", tenantId: "tenant_alpha", name: "Alpha 主管", role: "supervisor", canViewAll: true },
-      { id: "user_emp_a", tenantId: "tenant_alpha", name: "员工小林", role: "employee", canViewAll: true },
-      { id: "user_emp_b", tenantId: "tenant_alpha", name: "员工小陈", role: "employee", canViewAll: false },
-      { id: "user_sup_b", tenantId: "tenant_beta", name: "Beta 主管", role: "supervisor", canViewAll: true },
+      { id: "user_admin", tenantId: null, name: "平台管理员", loginName: "admin", role: "admin", canViewAll: true },
+      { id: "user_sup_a", tenantId: "tenant_alpha", name: "Alpha 主管", loginName: "alpha_sup", role: "supervisor", canViewAll: true },
+      { id: "user_emp_a", tenantId: "tenant_alpha", name: "员工小林", loginName: "xiaolin", role: "employee", canViewAll: true },
+      { id: "user_emp_b", tenantId: "tenant_alpha", name: "员工小陈", loginName: "xiaochen", role: "employee", canViewAll: false },
+      { id: "user_sup_b", tenantId: "tenant_beta", name: "Beta 主管", loginName: "beta_sup", role: "supervisor", canViewAll: true },
     ],
     wallets: [
       { id: "wallet_a_hot", tenantId: "tenant_alpha", alias: "热钱包 A", chain: "TRC20", address: "TQ9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWb", enabled: true },
@@ -717,14 +718,13 @@
   }
 
   function renderLogin() {
-    const accounts = loginAccounts.length ? loginAccounts : seed.users;
     const isProduction = runtimeConfig.productionMode === true;
     return `
       <main class="login-page">
         <section class="login-panel">
           <div class="brand"><strong>智慧星 USDT 财务记账系统</strong><span>专业的现金流台账、批注审核与链上流水对账系统</span></div>
           <form id="loginForm" class="form-grid one">
-            <label>账号<select name="userId" required>${accounts.map((user) => `<option value="${user.id}">${user.name} / ${roleLabel(user.role)}</option>`).join("")}</select></label>
+            <label>账号<input name="loginName" autocomplete="username" required placeholder="请输入登录账号"></label>
             <label>密码<input name="password" type="password" value="${isProduction ? "" : "123456"}" required></label>
             <button class="btn primary" type="submit">登录系统</button>
           </form>
@@ -1476,13 +1476,16 @@
   function renderUsers() {
     const canManage = currentUser().role === "supervisor";
     return `
-      ${pageHead("账号管理", "主管创建员工账号，并设置员工是否可查看全部账目")}
+      ${pageHead("账号管理", "主管可创建员工或主管账号，并设置员工是否可查看全部账目")}
       ${canManage ? `<section class="user-management-layout">
-        <div class="panel user-create-panel"><div class="panel-title"><h3>新增员工</h3></div>
+        <div class="panel user-create-panel"><div class="panel-title"><h3>新增账号</h3></div>
           <form id="userForm" class="form-grid one compact-form">
-            <label>员工姓名<input name="name" required></label>
+            <label>姓名<input name="name" required></label>
+            <label>角色<select name="role"><option value="employee">员工</option><option value="supervisor">主管</option></select></label>
+            <label>登录账号<input name="loginName" autocomplete="off" required placeholder="3-32 位字母、数字或 _ . @ -"></label>
+            <label>初始密码<input name="password" type="password" autocomplete="new-password" minlength="6" required placeholder="至少 6 位"></label>
             <label class="checkline"><input name="canViewAll" type="checkbox" checked> 查看全部账目(取消勾选则只可以查看员工自己提交的账目)</label>
-            <div class="actions"><button class="btn primary" type="submit">创建员工</button></div>
+            <div class="actions"><button class="btn primary" type="submit">创建账号</button></div>
           </form>
         </div><div class="panel">${renderUserTable()}</div>
       </section>` : `<div class="panel">${renderUserTable()}</div>`}
@@ -1491,8 +1494,8 @@
 
   function renderUserTable() {
     return `<div class="panel-title"><h3>账号列表</h3></div><div class="table-wrap user-table-wrap"><table class="user-table">
-      <thead><tr><th>姓名</th><th>角色</th><th>查看全部账目</th>${canReview() ? "<th>操作</th>" : ""}</tr></thead>
-      <tbody>${tenantUsers().map((user) => `<tr><td>${user.name}</td><td>${roleLabel(user.role)}</td><td>${user.canViewAll ? "是" : "否"}</td>${canReview() ? `<td>${user.role === "employee" ? `<label class="checkline compact"><input type="checkbox" data-user-view-all="${user.id}" ${user.canViewAll ? "checked" : ""}> 允许查看全部</label>` : "-"}</td>` : ""}</tr>`).join("")}</tbody>
+      <thead><tr><th>姓名</th><th>登录账号</th><th>角色</th><th>查看全部账目</th>${canReview() ? "<th>操作</th>" : ""}</tr></thead>
+      <tbody>${tenantUsers().map((user) => `<tr><td>${escapeHtml(user.name)}</td><td>${escapeHtml(user.loginName || user.id || "-")}</td><td>${roleLabel(user.role)}</td><td>${user.canViewAll ? "是" : "否"}</td>${canReview() ? `<td>${user.role === "employee" ? `<label class="checkline compact"><input type="checkbox" data-user-view-all="${user.id}" ${user.canViewAll ? "checked" : ""}> 允许查看全部</label>` : "-"}</td>` : ""}</tr>`).join("")}</tbody>
     </table></div>`;
   }
 
@@ -1638,7 +1641,13 @@
       ${pageHead("系统管理", "开通和管理独立系统，并维护全局收支分类")}
       <section class="grid two-col">
         <div class="panel"><div class="panel-title"><h3>开通独立系统</h3></div>
-          <form id="tenantForm" class="form-grid one"><label>系统名称<input name="name" required></label><label>首位主管<input name="supervisorName" required></label><div class="actions"><button class="btn primary" type="submit">开通系统</button></div></form>
+          <form id="tenantForm" class="form-grid one">
+            <label>系统名称<input name="name" required></label>
+            <label>首位主管姓名<input name="supervisorName" required></label>
+            <label>主管登录账号<input name="supervisorLoginName" autocomplete="off" required placeholder="3-32 位字母、数字或 _ . @ -"></label>
+            <label>主管初始密码<input name="supervisorPassword" type="password" autocomplete="new-password" minlength="6" required placeholder="至少 6 位"></label>
+            <div class="actions"><button class="btn primary" type="submit">开通系统</button></div>
+          </form>
         </div>
         <div class="panel"><div class="panel-title"><h3>钱包启用限制</h3><span>按每个系统单独计算</span></div>
           <form id="systemSettingsForm" class="form-grid one">
@@ -1927,7 +1936,9 @@
           "纳入管理起始时间创建后不可修改，避免历史流水统计口径发生变化。",
         ])}
         ${helpSection("八、账号管理", [
-          "主管可以创建员工账号，并设置员工是否允许查看全部账目。",
+          "主管可以创建员工或主管账号，并设置员工是否允许查看全部账目。",
+          "新增账号时需要填写姓名、登录账号和初始密码；正式登录页使用账号和密码登录，不再选择角色。",
+          "主管账号默认可以查看和审核本系统数据，不显示员工查看范围开关。",
           "勾选查看全部账目时，员工可以查看本系统全部账目。",
           "取消勾选时，员工只能查看自己提交或需要自己处理的记录。",
           "员工无权限创建账号或修改其他员工权限。",
@@ -2184,6 +2195,9 @@
       const input = document.querySelector("[data-managed-from]");
       input.readOnly = event.target.value !== "custom";
       input.value = event.target.value === "custom" ? input.value : managedFromPreset(event.target.value);
+    });
+    document.querySelector("#userForm select[name='role']")?.addEventListener("change", (event) => {
+      document.querySelector("#userForm .checkline")?.toggleAttribute("hidden", event.target.value === "supervisor");
     });
     document.querySelector("#userForm")?.addEventListener("submit", submitUser);
     document.querySelector("#tenantForm")?.addEventListener("submit", submitTenant);
@@ -2698,11 +2712,20 @@
   async function submitUser(event) {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.target).entries());
-    if (!confirm(`确认创建员工「${data.name || ""}」？`)) return;
+    const roleText = data.role === "supervisor" ? "主管" : "员工";
+    if (!confirm(`确认创建${roleText}账号「${data.name || ""}」？`)) return;
     try {
-      await apiMutate("/api/users", { body: { name: data.name, canViewAll: data.canViewAll === "on" } });
+      await apiMutate("/api/users", {
+        body: {
+          name: data.name,
+          role: data.role,
+          loginName: data.loginName,
+          password: data.password,
+          canViewAll: data.canViewAll === "on",
+        },
+      });
       render();
-      toast(runtimeConfig.productionMode ? "员工账号已创建，请设置正式密码" : "员工账号已创建，测试密码 123456");
+      toast(`${roleText}账号已创建，可使用登录账号和初始密码登录`);
     } catch (error) {
       toast(error.message);
     }
@@ -2715,7 +2738,7 @@
     try {
       await apiMutate("/api/tenants", { body: data });
       render();
-      toast(runtimeConfig.productionMode ? "系统已开通，请设置主管正式密码" : "系统已开通，主管测试密码 123456");
+      toast("系统已开通，主管可使用登录账号和初始密码登录");
     } catch (error) {
       toast(error.message);
     }

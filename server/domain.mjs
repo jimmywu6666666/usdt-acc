@@ -1,3 +1,4 @@
+import { hashPassword } from "./auth.mjs";
 import { isValidTronAddress } from "./tron-provider.mjs";
 
 const requiredArrays = ["tenants", "users", "wallets", "annotations", "chainTransactions", "auditLogs"];
@@ -681,11 +682,29 @@ export function enableWallet(state, { user, walletId, now = new Date().toISOStri
 export function createEmployee(state, { user, input, now = new Date().toISOString() }) {
   assertSupervisor(state, user.id, user.tenantId);
   const name = String(input.name || "").trim();
-  if (!name) throw badRequest("员工姓名不能为空");
-  const employee = { id: id("user"), tenantId: user.tenantId, name, role: "employee", canViewAll: input.canViewAll === true };
-  state.users.push(employee);
-  appendLog(state, { tenantId: user.tenantId, userId: user.id, action: "创建员工账号", target: name, createdAt: now });
-  return employee;
+  const role = input.role === "supervisor" ? "supervisor" : "employee";
+  const loginName = String(input.loginName || "").trim();
+  const password = String(input.password || "");
+  if (!name) throw badRequest("账号姓名不能为空");
+  validateNewLogin(state, loginName, password);
+  const teamUser = {
+    id: id("user"),
+    tenantId: user.tenantId,
+    name,
+    loginName,
+    role,
+    canViewAll: role === "supervisor" ? true : input.canViewAll === true,
+    passwordHash: hashPassword(password),
+  };
+  state.users.push(teamUser);
+  appendLog(state, {
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: role === "supervisor" ? "创建主管账号" : "创建员工账号",
+    target: name,
+    createdAt: now,
+  });
+  return teamUser;
 }
 
 export function updateEmployeePermission(state, { user, employeeId, canViewAll, now = new Date().toISOString() }) {
@@ -702,9 +721,20 @@ export function createTenant(state, { user, input, now = new Date().toISOString(
   assertAdmin(user);
   const name = String(input.name || "").trim();
   const supervisorName = String(input.supervisorName || "").trim();
+  const supervisorLoginName = String(input.supervisorLoginName || "").trim();
+  const supervisorPassword = String(input.supervisorPassword || "");
   if (!name || !supervisorName) throw badRequest("系统名称和主管姓名不能为空");
+  validateNewLogin(state, supervisorLoginName, supervisorPassword);
   const tenant = { id: id("tenant"), name, enabled: true, createdAt: now };
-  const supervisor = { id: id("user"), tenantId: tenant.id, name: supervisorName, role: "supervisor", canViewAll: true };
+  const supervisor = {
+    id: id("user"),
+    tenantId: tenant.id,
+    name: supervisorName,
+    loginName: supervisorLoginName,
+    role: "supervisor",
+    canViewAll: true,
+    passwordHash: hashPassword(supervisorPassword),
+  };
   state.tenants.push(tenant);
   state.users.push(supervisor);
   state.activeTenantId = tenant.id;
@@ -726,6 +756,21 @@ export function updateTenantStatus(state, { user, tenantId, enabled, now = new D
     createdAt: now,
   });
   return tenant;
+}
+
+function validateNewLogin(state, loginName, password) {
+  if (!loginName) throw badRequest("登录账号不能为空");
+  if (!/^[A-Za-z0-9_.@-]{3,32}$/.test(loginName)) {
+    throw badRequest("登录账号需为 3-32 位字母、数字、点、下划线、@ 或横线");
+  }
+  if (state.users.some((item) => sameLoginName(item.loginName || item.id || item.name, loginName))) {
+    throw badRequest("登录账号已存在");
+  }
+  if (password.length < 6) throw badRequest("初始密码至少 6 位");
+}
+
+function sameLoginName(left, right) {
+  return String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase();
 }
 
 export function updateSubscriptionSettings(state, { user, input, now = new Date().toISOString() }) {

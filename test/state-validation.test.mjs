@@ -370,13 +370,24 @@ test("calculates wallet balance from confirmed chain transactions", () => {
 test("supervisor manages wallets, employees and visibility permissions", () => {
   const state = ledgerState();
   createWallet(state, { user: user(state, "sup"), input: { alias: "新钱包", chain: "TRC20", address: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t" } });
-  createEmployee(state, { user: user(state, "sup"), input: { name: "员工丙", canViewAll: false } });
+  createEmployee(state, { user: user(state, "sup"), input: { name: "员工丙", loginName: "emp_c", password: "secret123", canViewAll: false } });
+  const newSupervisor = createEmployee(state, {
+    user: user(state, "sup"),
+    input: { name: "主管乙", role: "supervisor", loginName: "sup_b", password: "secret123" },
+  });
   updateEmployeePermission(state, { user: user(state, "sup"), employeeId: "emp", canViewAll: false });
   disableWallet(state, { user: user(state, "sup"), walletId: "wallet" });
   assert.equal(state.wallets.find((item) => item.id === "wallet").enabled, false);
   enableWallet(state, { user: user(state, "sup"), walletId: "wallet" });
   assert.equal(state.wallets.find((item) => item.id === "wallet").enabled, true);
   assert.equal(user(state, "emp").canViewAll, false);
+  assert.equal(newSupervisor.role, "supervisor");
+  assert.equal(newSupervisor.canViewAll, true);
+  assert.equal(verifyPassword(newSupervisor, "secret123", { allowDemoPassword: false }), true);
+  assert.throws(() => createEmployee(state, {
+    user: user(state, "sup"),
+    input: { name: "重复账号", loginName: "emp_c", password: "secret123" },
+  }), /登录账号已存在/);
 });
 
 test("admin wallet enabled limit blocks new and re-enabled wallets", () => {
@@ -536,9 +547,15 @@ test("receivable attachments respect employee visibility", () => {
 
 test("admin creates tenants and global categories", () => {
   const state = ledgerState();
-  createTenant(state, { user: user(state, "admin"), input: { name: "Beta", supervisorName: "Beta 主管" } });
+  createTenant(state, {
+    user: user(state, "admin"),
+    input: { name: "Beta", supervisorName: "Beta 主管", supervisorLoginName: "beta_sup", supervisorPassword: "secret123" },
+  });
   createCategory(state, { user: user(state, "admin"), input: { type: "income", name: "新进账分类" } });
+  const supervisor = state.users.find((item) => item.name === "Beta 主管");
   assert.equal(state.tenants.at(-1).name, "Beta");
+  assert.equal(supervisor.loginName, "beta_sup");
+  assert.equal(verifyPassword(supervisor, "secret123", { allowDemoPassword: false }), true);
   assert.equal(state.categories.income.includes("新进账分类"), true);
 });
 

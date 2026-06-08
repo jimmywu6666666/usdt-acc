@@ -202,13 +202,14 @@ async function handleApi(req, res, pathname) {
       throw error;
     }
     const body = await readJsonBody(req);
-    const user = state.users.find((item) => item.id === body.userId);
+    const loginName = String(body.loginName || body.account || body.userId || "").trim();
+    const user = findLoginUser(state.users || [], loginName);
     if (!user || !verifyPassword(user, body.password || "", { allowDemoPassword: !productionMode })) {
       appendLog(state, {
         tenantId: user?.tenantId || null,
-        userId: user?.id || String(body.userId || "unknown"),
+        userId: user?.id || loginName || "unknown",
         action: "登录失败",
-        target: user?.name || String(body.userId || "未知账号"),
+        target: user?.name || loginName || "未知账号",
       });
       await storage.writeState?.(state);
       const error = new Error("账号或密码不正确");
@@ -787,6 +788,20 @@ async function handleApi(req, res, pathname) {
   }
 
   respond(404, { error: "API 不存在" });
+}
+
+function findLoginUser(users, loginName) {
+  const normalized = normalizeLoginName(loginName);
+  if (!normalized) return null;
+  return users.find((user) => (
+    normalizeLoginName(user.loginName) === normalized
+    || normalizeLoginName(user.name) === normalized
+    || normalizeLoginName(user.id) === normalized
+  )) || null;
+}
+
+function normalizeLoginName(value) {
+  return String(value || "").trim().toLowerCase();
 }
 
 async function serveStatic(req, res, pathname) {
