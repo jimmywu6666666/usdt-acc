@@ -142,8 +142,8 @@ export function walletBalanceSnapshotForDate(state, { walletId, dateKey }) {
 export function createAnnotation(state, { user, input, now = new Date().toISOString() }) {
   reconcileState(state);
   const tx = getVisibleTransaction(state, user, input.chainTxId);
-  if (!isManagedTransactionGroup(state, tx) && user.role === "employee") {
-    throw forbidden("该流水早于钱包纳入管理时间，如需补批注请联系主管");
+  if (!isManagedTransactionGroup(state, tx)) {
+    throw badRequest("历史无需批注流水不需要批注");
   }
   if (tx.transactionType === "transfer" && tx.internalTransferStatus !== "paired") {
     throw badRequest("内部划转另一侧流水尚未同步，确认完整后才能批注");

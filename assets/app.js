@@ -898,7 +898,6 @@
     const actions = [`<button class="btn" data-detail="${tx.id}">详情</button>`];
     if (!annotation && isManagedTransaction(tx) && tx.internalTransferStatus !== "pending") actions.push(`<button class="btn primary" data-annotate-tx="${tx.id}">批注</button>`);
     if (!annotation && isManagedTransaction(tx) && tx.internalTransferStatus !== "pending" && canManageNonBusiness()) actions.push(`<button class="btn warn" data-non-business="${tx.id}">非业务</button>`);
-    if (!annotation && !isManagedTransaction(tx) && canReview()) actions.push(`<button class="btn warn" data-annotate-tx="${tx.id}">纳入批注</button>`);
     if (annotation?.status === "non_business" && canManageNonBusiness()) actions.push(`<button class="btn" data-restore-non-business="${annotation.id}">恢复待批注</button>`);
     if (annotation?.status === "rejected" && canEditAnnotation(annotation)) actions.push(`<button class="btn primary" data-resubmit="${annotation.id}">修改重提</button>`);
     if (annotation?.status === "approved" && annotation.correctionType !== "reversal" && canEditAnnotation(annotation)) {
@@ -924,7 +923,7 @@
     const editingTx = editing ? state.chainTransactions.find((tx) => tx.id === editing.chainTxId) : null;
     const available = tenantTransactions().filter((tx) => !currentAnnotation(tx)
       && tx.internalTransferStatus !== "pending"
-      && (isManagedTransaction(tx) || canReview()));
+      && isManagedTransaction(tx));
     const selectedTx = editingTx || available[0] || null;
     const categories = selectedTx ? selectedTx.transactionType === "transfer" ? ["内部划转"] : state.categories[selectedTx.direction] : [];
     return `

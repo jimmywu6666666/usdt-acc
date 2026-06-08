@@ -386,12 +386,11 @@ test("wallet management start time controls whether employees must annotate hist
   const state = ledgerState({
     wallets: [{ id: "wallet", tenantId: "tenant_alpha", alias: "主钱包", chain: "TRC20", address: "T123", enabled: true, managedFrom: "2026-06-06T00:00:00.000Z" }],
   });
-  assert.throws(() => annotate(state), /早于钱包纳入管理时间/);
-  const supervisorAnnotation = createAnnotation(state, {
+  assert.throws(() => annotate(state), /历史无需批注/);
+  assert.throws(() => createAnnotation(state, {
     user: user(state, "sup"),
     input: { chainTxId: "tx", category: "供应商付款", note: "主管主动补历史批注" },
-  });
-  assert.equal(supervisorAnnotation.status, "pending");
+  }), /历史无需批注/);
 });
 
 test("wallet management start time cannot be changed after creation", () => {
