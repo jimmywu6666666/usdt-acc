@@ -53,6 +53,7 @@ function fixture() {
     subscriptionSettings: {
       enabled: true,
       monthlyFee: 100,
+      firstOpenFee: 49,
       platformWalletAddress: "TPlatform",
       autoDisable: true,
     },
@@ -89,6 +90,7 @@ test("supervisors only receive their tenant data", () => {
   assert.equal("toAddress" in view.platformPayments[0], false);
   assert.equal("processedBy" in view.platformPayments[0], false);
   assert.equal(view.subscriptionSettings.monthlyFee, 100);
+  assert.equal(view.subscriptionSettings.firstOpenFee, 49);
   assert.equal(view.subscriptionSettings.platformWalletAddress, "TPlatform");
   assert.equal(view.auditLogs.some((item) => item.id === "admin_read_log"), false);
   assert.equal(view.auditLogs.some((item) => item.id === "login_log"), false);

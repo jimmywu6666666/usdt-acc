@@ -163,6 +163,7 @@
     receivableSettlements: [],
     subscriptionSettings: {
       monthlyFee: 100,
+      firstOpenFee: 0,
       platformWalletAddress: "",
       enabled: false,
       autoDisable: true,
@@ -354,12 +355,14 @@
 
   function bindGlobalCopyHash() {
     document.addEventListener("click", async (event) => {
-      const target = event.target.closest("[data-copy-hash]");
+      const target = event.target.closest("[data-copy-hash], [data-copy-text]");
       if (!target) return;
       event.preventDefault();
       event.stopPropagation();
-      const ok = await copyText(target.dataset.copyHash);
-      toast(ok ? "交易哈希已复制" : "复制失败，请手动复制");
+      const value = target.dataset.copyHash || target.dataset.copyText;
+      const label = target.dataset.copyLabel || (target.dataset.copyHash ? "交易哈希" : "内容");
+      const ok = await copyText(value);
+      toast(ok ? `${label}已复制` : "复制失败，请手动复制");
     });
   }
 
@@ -590,6 +593,13 @@
     if (!value) return "-";
     const text = short ? shortHash(value) : value;
     return `<button class="copy-hash mono" type="button" data-copy-hash="${escapeHtml(value)}" title="点击复制交易哈希">${escapeHtml(text)}</button>`;
+  }
+
+  function renderCopyText(text, label = "内容", { short = false } = {}) {
+    const value = String(text || "").trim();
+    if (!value) return "-";
+    const display = short && value.length > 18 ? `${value.slice(0, 8)}...${value.slice(-6)}` : value;
+    return `<button class="copy-hash mono" type="button" data-copy-text="${escapeHtml(value)}" data-copy-label="${escapeHtml(label)}" title="点击复制${escapeHtml(label)}">${escapeHtml(display)}</button>`;
   }
 
   function renderCategoryOptions(categories, selectedCategory = "") {
@@ -1641,6 +1651,14 @@
     const settings = state.subscriptionSettings || {};
     if (currentUser().role === "supervisor") {
       const tenant = currentTenant();
+      const firstOpenFee = Number(settings.firstOpenFee || 0);
+      const isUnopened = !tenant.subscriptionExpiresAt;
+      const rentText = isUnopened && firstOpenFee > 0
+        ? `${money(firstOpenFee)} USDT`
+        : `${money(settings.monthlyFee)} USDT`;
+      const rentHint = isUnopened && firstOpenFee > 0
+        ? `首次开通优惠价；后续续费按 ${money(settings.monthlyFee)} USDT/月`
+        : settings.enabled ? "支持提交交易哈希续费" : "暂未启用哈希续费";
       return `
         ${pageHead("租用续费", "查看租用状态，付款后提交交易哈希完成自动续费")}
         <section class="grid two-col subscription-overview">
@@ -1658,16 +1676,16 @@
                 <em>${tenant.enabled ? "系统启用中" : "系统已停用"}</em>
               </div>
               <div>
-                <span>月租费用</span>
-                <strong>${money(settings.monthlyFee)} USDT</strong>
-                <em>${settings.enabled ? "支持提交交易哈希续费" : "暂未启用哈希续费"}</em>
+                <span>${isUnopened && firstOpenFee > 0 ? "首次开通价" : "月租费用"}</span>
+                <strong>${rentText}</strong>
+                <em>${rentHint}</em>
               </div>
             </div>
           </div>
           <div class="panel">
             <div class="panel-title"><h3>提交续费哈希</h3><span>同一交易哈希只能提交一次</span></div>
             <div class="metric-list">
-              <div><span>平台收款钱包</span><strong class="mono">${escapeHtml(settings.platformWalletAddress || "管理员暂未配置")}</strong></div>
+              <div><span>平台收款钱包</span><strong>${settings.platformWalletAddress ? renderCopyText(settings.platformWalletAddress, "平台收款钱包") : "管理员暂未配置"}</strong></div>
               <div><span>哈希续费</span><strong>${settings.enabled ? "已启用" : "未启用"}</strong></div>
             </div>
             <form id="subscriptionHashForm" class="form-grid one">
@@ -1691,9 +1709,10 @@
           <div class="panel-title"><h3>收费设置</h3><span>平台收款钱包用于租户续费，不计入租户业务流水</span></div>
           <form id="subscriptionSettingsForm" class="form-grid one">
             <label>月租费用（USDT）<input name="monthlyFee" type="number" min="0.000001" step="0.000001" value="${escapeHtml(settings.monthlyFee || 100)}" required></label>
+            <label><span class="field-label">首次开通优惠价（USDT） <em class="optional-mark">填 0 关闭</em></span><input name="firstOpenFee" type="number" min="0" step="0.000001" value="${escapeHtml(settings.firstOpenFee || 0)}" required></label>
             <label><span class="field-label">平台收款钱包地址 <em class="optional-mark">启用自动续费时填写</em></span><input name="platformWalletAddress" value="${escapeHtml(settings.platformWalletAddress || "")}" placeholder="T..."></label>
             <label class="checkline"><input name="enabled" type="checkbox" ${settings.enabled ? "checked" : ""}> 启用交易哈希自动续费</label>
-            <p class="form-hint">勾选后，主管付款后可提交交易哈希，系统校验到账并自动续租；未勾选时只能由管理员手工处理。</p>
+            <p class="form-hint">勾选后，主管付款后可提交交易哈希，系统校验到账并自动续租；未开通租户可按首次优惠价开通，优惠价为 0 时按正常月租计算。</p>
             <label class="checkline"><input name="autoDisable" type="checkbox" ${settings.autoDisable !== false ? "checked" : ""}> 到期后自动停用系统</label>
             <div class="actions"><button class="btn primary" type="submit">保存设置</button></div>
           </form>
@@ -2985,6 +3004,7 @@
         method: "PATCH",
         body: {
           monthlyFee: Number(data.monthlyFee),
+          firstOpenFee: Number(data.firstOpenFee || 0),
           platformWalletAddress: data.platformWalletAddress,
           enabled: data.enabled === "on",
           autoDisable: data.autoDisable === "on",
@@ -3733,8 +3753,9 @@
     state.platformPayments ||= [];
     state.receivablePayables ||= [];
     state.receivableSettlements ||= [];
-    state.subscriptionSettings ||= { monthlyFee: 100, platformWalletAddress: "", enabled: false, autoDisable: true };
+    state.subscriptionSettings ||= { monthlyFee: 100, firstOpenFee: 0, platformWalletAddress: "", enabled: false, autoDisable: true };
     state.subscriptionSettings.monthlyFee ||= 100;
+    state.subscriptionSettings.firstOpenFee = Number(state.subscriptionSettings.firstOpenFee || 0);
     state.subscriptionSettings.platformWalletAddress ||= "";
     state.subscriptionSettings.enabled = state.subscriptionSettings.enabled === true;
     state.subscriptionSettings.autoDisable = state.subscriptionSettings.autoDisable !== false;

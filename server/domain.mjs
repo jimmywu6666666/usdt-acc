@@ -38,6 +38,7 @@ export function migrateAnnotationState(state) {
   state.legacyEntries ||= [];
   state.subscriptionSettings ||= {};
   state.subscriptionSettings.monthlyFee = positiveNumberOrDefault(state.subscriptionSettings.monthlyFee, 100);
+  state.subscriptionSettings.firstOpenFee = nonNegativeNumberOrDefault(state.subscriptionSettings.firstOpenFee, 0);
   state.subscriptionSettings.platformWalletAddress ||= "";
   state.subscriptionSettings.enabled = state.subscriptionSettings.enabled === true;
   state.subscriptionSettings.autoDisable = state.subscriptionSettings.autoDisable !== false;
@@ -817,11 +818,15 @@ export function updateSubscriptionSettings(state, { user, input, now = new Date(
   reconcileState(state);
   assertAdmin(user);
   const monthlyFee = Number(input.monthlyFee);
+  const firstOpenFee = Number(input.firstOpenFee || 0);
   const platformWalletAddress = String(input.platformWalletAddress || "").trim();
   if (!Number.isFinite(monthlyFee) || monthlyFee <= 0) throw badRequest("月租费用必须大于 0");
+  if (!Number.isFinite(firstOpenFee) || firstOpenFee < 0) throw badRequest("首次开通优惠价不能小于 0");
+  if (firstOpenFee > 0 && firstOpenFee >= monthlyFee) throw badRequest("首次开通优惠价必须低于月租费用");
   if (platformWalletAddress && !isValidTronAddress(platformWalletAddress)) throw badRequest("平台收款钱包地址格式或校验码不正确");
   state.subscriptionSettings = {
     monthlyFee,
+    firstOpenFee,
     platformWalletAddress,
     enabled: input.enabled === true,
     autoDisable: input.autoDisable !== false,
@@ -831,7 +836,7 @@ export function updateSubscriptionSettings(state, { user, input, now = new Date(
     tenantId: null,
     userId: user.id,
     action: "修改租用收费设置",
-    target: `${monthlyFee} USDT/月:${platformWalletAddress || "未设置"}`,
+    target: `${monthlyFee} USDT/月:首开${firstOpenFee || "关闭"}:${platformWalletAddress || "未设置"}`,
     createdAt: now,
   });
   return state.subscriptionSettings;
@@ -898,7 +903,7 @@ export function submitSubscriptionHash(state, {
     processedBy: null,
     source: "hash",
   };
-  const months = subscriptionMonths(payment.amount, settings.monthlyFee);
+  const months = subscriptionMonths(payment.amount, settings, tenant);
   if (months.status === "ok") {
     payment.status = "applied";
     payment.months = months.months;
@@ -1385,6 +1390,11 @@ function nonNegativeIntegerOrDefault(value, fallback) {
   return Number.isInteger(numeric) && numeric >= 0 ? numeric : fallback;
 }
 
+function nonNegativeNumberOrDefault(value, fallback) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : fallback;
+}
+
 function assertWalletEnabledLimit(state, tenantId) {
   const limit = nonNegativeIntegerOrDefault(state.systemSettings?.walletEnabledLimit, 0);
   if (!limit) return;
@@ -1394,11 +1404,28 @@ function assertWalletEnabledLimit(state, tenantId) {
   }
 }
 
-function subscriptionMonths(amount, monthlyFee) {
+function subscriptionMonths(amount, settingsOrMonthlyFee, tenant = null) {
   const value = Number(amount);
-  const fee = Number(monthlyFee);
+  const settings = typeof settingsOrMonthlyFee === "object"
+    ? settingsOrMonthlyFee || {}
+    : { monthlyFee: settingsOrMonthlyFee, firstOpenFee: 0 };
+  const fee = Number(settings.monthlyFee);
+  const firstOpenFee = Number(settings.firstOpenFee || 0);
+  const unopened = tenant && !tenant.subscriptionExpiresAt;
   if (!Number.isFinite(value) || value <= 0) return { status: "amount_abnormal", reason: "金额无效" };
   if (!Number.isFinite(fee) || fee <= 0) return { status: "amount_abnormal", reason: "月租费用未正确配置" };
+  if (unopened && firstOpenFee > 0) {
+    if (Math.abs(value - firstOpenFee) <= 0.000001) {
+      return { status: "ok", months: 1 };
+    }
+    if (value > firstOpenFee) {
+      const remaining = value - firstOpenFee;
+      const extraMonths = Math.round(remaining / fee);
+      if (extraMonths >= 1 && Math.abs(remaining - extraMonths * fee) <= 0.000001) {
+        return { status: "ok", months: extraMonths + 1 };
+      }
+    }
+  }
   if (value + 0.000001 < fee) return { status: "amount_insufficient", reason: "金额不足，不自动续费" };
   const months = Math.round(value / fee);
   if (Math.abs(value - months * fee) > 0.000001) {

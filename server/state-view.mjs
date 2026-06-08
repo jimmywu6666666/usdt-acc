@@ -31,6 +31,7 @@ export function stateForUser(state, user) {
   safeState.subscriptionSettings = {
     enabled: safeState.subscriptionSettings?.enabled === true,
     monthlyFee: safeState.subscriptionSettings?.monthlyFee || 0,
+    firstOpenFee: Number(safeState.subscriptionSettings?.firstOpenFee || 0),
     platformWalletAddress: safeState.subscriptionSettings?.platformWalletAddress || "",
     autoDisable: safeState.subscriptionSettings?.autoDisable !== false,
   };

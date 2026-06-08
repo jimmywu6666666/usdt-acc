@@ -681,15 +681,43 @@ test("bad hash payment amount is left for admin manual renewal", () => {
   assert.equal(state.tenants[0].subscriptionExpiresAt, "2026-07-23T00:02:00.000Z");
 });
 
+test("unopened tenant can use first opening discount for subscription hash", () => {
+  const hash = "c".repeat(64);
+  const state = ledgerState({
+    tenants: [{ id: "tenant_alpha", name: "Alpha", enabled: true }],
+    subscriptionSettings: {
+      monthlyFee: 100,
+      firstOpenFee: 49,
+      platformWalletAddress: "TUfGNh99WN3GH5WjnqFKottWuYKpjomNbd",
+      enabled: true,
+      autoDisable: true,
+    },
+  });
+  const payment = submitSubscriptionHash(state, {
+    user: user(state, "sup"),
+    hash,
+    now: "2026-06-08T00:00:00.000Z",
+    transaction: {
+      hash, direction: "income", amount: 149, counterparty: "TPayer",
+      confirmed: true, chainTime: "2026-06-08T00:00:00.000Z",
+    },
+  });
+  assert.equal(payment.status, "applied");
+  assert.equal(payment.months, 2);
+  assert.equal(payment.reason, "交易哈希自动续费 2 个月");
+  assert.equal(state.tenants[0].subscriptionExpiresAt, "2026-08-08T00:00:00.000Z");
+});
+
 test("subscription settings and expiry are admin controlled", () => {
   const state = ledgerState({
     tenants: [{ id: "tenant_alpha", name: "Alpha", enabled: true, subscriptionExpiresAt: "2026-06-01T00:00:00.000Z" }],
   });
   updateSubscriptionSettings(state, {
     user: user(state, "admin"),
-    input: { monthlyFee: 80, platformWalletAddress: "TUfGNh99WN3GH5WjnqFKottWuYKpjomNbd", enabled: true, autoDisable: true },
+    input: { monthlyFee: 80, firstOpenFee: 39, platformWalletAddress: "TUfGNh99WN3GH5WjnqFKottWuYKpjomNbd", enabled: true, autoDisable: true },
   });
   assert.equal(state.subscriptionSettings.monthlyFee, 80);
+  assert.equal(state.subscriptionSettings.firstOpenFee, 39);
   const expired = enforceTenantSubscriptions(state, { user: user(state, "admin"), now: "2026-06-08T00:00:00.000Z" });
   assert.equal(expired.length, 1);
   assert.equal(state.tenants[0].enabled, false);
