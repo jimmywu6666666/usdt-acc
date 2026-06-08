@@ -673,7 +673,7 @@
         <div class="brand">
           <div class="brand-mark">¥</div>
           <div>
-            <h1>智慧星 USTD 财务记账系统</h1>
+            <h1>智慧星 USDT 财务记账系统</h1>
             <p>专业的现金流台账、批注审核与链上流水对账系统</p>
           </div>
         </div>
@@ -705,7 +705,7 @@
     return `
       <main class="login-page">
         <section class="login-panel">
-          <div class="brand"><strong>智慧星 USTD 财务记账系统</strong><span>专业的现金流台账、批注审核与链上流水对账系统</span></div>
+          <div class="brand"><strong>智慧星 USDT 财务记账系统</strong><span>专业的现金流台账、批注审核与链上流水对账系统</span></div>
           <form id="loginForm" class="form-grid one">
             <label>账号<select name="userId" required>${accounts.map((user) => `<option value="${user.id}">${user.name} / ${roleLabel(user.role)}</option>`).join("")}</select></label>
             <label>密码<input name="password" type="password" value="${isProduction ? "" : "123456"}" required></label>
