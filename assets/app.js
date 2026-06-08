@@ -852,16 +852,35 @@
     const monthSnapshot = balanceSnapshot(wallet.id, periods[2].start, periods[2].end);
     return {
       current,
-      todayChange: todaySnapshot ? current - Number(todaySnapshot.balance) : null,
-      monthChange: monthSnapshot ? current - Number(monthSnapshot.balance) : null,
+      todayChange: balanceChangeInfo(current, todaySnapshot, periods[0].start),
+      monthChange: balanceChangeInfo(current, monthSnapshot, periods[2].start),
     };
   }
 
-  function balanceChangeLine(label, value) {
-    if (value == null) return `<span class="muted">${label}：暂无快照</span>`;
+  function balanceChangeInfo(current, snapshot, expectedStartDate) {
+    if (!snapshot) return null;
+    return {
+      value: current - Number(snapshot.balance),
+      dateKey: snapshot.dateKey,
+      expectedStartKey: dateInputValue(expectedStartDate),
+    };
+  }
+
+  function snapshotDateText(dateKey) {
+    if (!dateKey) return "";
+    const [year, month, day] = String(dateKey).split("-");
+    return [year, String(Number(month || 0)), String(Number(day || 0))].filter(Boolean).join("/");
+  }
+
+  function balanceChangeLine(label, change) {
+    if (!change) return `<span class="muted">${label}：暂无快照</span>`;
+    const value = typeof change === "number" ? change : Number(change.value);
     const sign = value > 0 ? "+" : "";
     const tone = value > 0 ? "positive" : value < 0 ? "negative" : "neutral";
-    return `<span class="balance-change ${tone}">${label}：${sign}${money(value)}</span>`;
+    const origin = typeof change === "object" && change.dateKey && change.dateKey !== change.expectedStartKey
+      ? ` <small>自 ${snapshotDateText(change.dateKey)}</small>`
+      : "";
+    return `<span class="balance-change ${tone}">${label}：${sign}${money(value)}${origin}</span>`;
   }
 
   function renderWalletBalanceTable() {

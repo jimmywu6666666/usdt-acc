@@ -1301,6 +1301,12 @@ tr:last-child td {
   font-weight: 700;
 }
 
+.balance-change small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .balance-change.positive {
   color: var(--green);
 }
