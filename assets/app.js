@@ -584,6 +584,13 @@
     return `<button class="copy-hash mono" type="button" data-copy-hash="${escapeHtml(value)}" title="点击复制交易哈希">${escapeHtml(text)}</button>`;
   }
 
+  function renderCategoryOptions(categories, selectedCategory = "") {
+    return [
+      `<option value="">请选择分类</option>`,
+      ...categories.map((category) => `<option value="${escapeHtml(category)}" ${category === selectedCategory ? "selected" : ""}>${escapeHtml(category)}</option>`),
+    ].join("");
+  }
+
   function subscriptionDurationText(item) {
     const parts = [];
     if (Number(item?.months || 0) > 0) parts.push(`${item.months} 个月`);
@@ -1128,7 +1135,7 @@
             </select>
           </label>
           ${renderAnnotationTxSummary(selectedTx)}
-          <label>分类<select name="category" required>${categories.map((category) => `<option ${category === editing?.category ? "selected" : ""}>${category}</option>`).join("")}</select></label>
+          <label>分类<select name="category" required>${renderCategoryOptions(categories, editing?.category || "")}</select></label>
           <div class="proof-field">
             <span>凭证上传 <em class="optional-mark">选填</em></span>
             <div class="proof-upload" data-proof-upload tabindex="0">
@@ -2327,7 +2334,7 @@
         ${renderAnnotationTxSummary(tx)}
         <label>分类
           <select name="category" required>
-            ${categories.map((category) => `<option value="${escapeHtml(category)}" ${category === editing?.category ? "selected" : ""}>${escapeHtml(category)}</option>`).join("")}
+            ${renderCategoryOptions(categories, editing?.category || "")}
           </select>
         </label>
         <label>备注用途
@@ -2349,6 +2356,7 @@
       `,
       submitText: editing ? "重新提交审核" : "提交批注审核",
       onSubmit: async (formData, close) => {
+        if (!formData.get("category")) throw new Error("请选择分类");
         const attachment = await readUpload(formData.get("attachmentFile"));
         await apiMutate(editing ? `/api/annotations/${encodeURIComponent(editing.id)}/resubmit` : "/api/annotations", {
           body: {
@@ -2373,6 +2381,10 @@
     const data = Object.fromEntries(formData.entries());
     const editing = state.annotations.find((annotation) => annotation.id === state.editingAnnotationId);
     const chainTxId = editing?.chainTxId || data.chainTxId;
+    if (!data.category) {
+      toast("请选择分类");
+      return;
+    }
     const attachment = await readUpload(formData.get("attachmentFile"));
     try {
       await apiMutate(editing ? `/api/annotations/${encodeURIComponent(editing.id)}/resubmit` : "/api/annotations", {
