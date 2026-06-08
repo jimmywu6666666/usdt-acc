@@ -1573,13 +1573,14 @@
             <div><span>登录密钥</span><strong>${user.totpEnabled ? "已绑定" : "未绑定"}</strong></div>
           </div>
         </div>
-        <div class="panel">
-          <div class="panel-title"><h3>安全设置</h3><span>修改后旧密码或旧验证码立即失效</span></div>
+        <div class="panel profile-security-panel">
+          <div class="panel-title"><h3>安全设置</h3></div>
+          <p class="profile-security-note">修改后旧密码或旧验证码立即失效。</p>
           <div class="actions profile-actions">
             <button class="btn primary" data-reset-password="${user.id}">修改我的密码</button>
             <button class="btn" data-reset-totp="${user.id}">重置我的登录密钥</button>
           </div>
-          <p class="form-hint">重置登录密钥后，请立即把新密钥保存到验证器；下次登录需要使用新的 6 位动态验证码。</p>
+          <p class="profile-security-hint">重置登录密钥后，请立即把新密钥保存到验证器；下次登录需要使用新的 6 位动态验证码。</p>
         </div>
       </section>
     `;

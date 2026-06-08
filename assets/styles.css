@@ -920,6 +920,24 @@ textarea {
   margin-top: 12px;
 }
 
+.profile-security-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-security-note,
+.profile-security-hint {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.profile-actions {
+  align-items: center;
+  margin: 18px 0 12px;
+}
+
 .pagination {
   display: flex;
   align-items: center;
