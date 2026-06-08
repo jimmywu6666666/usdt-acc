@@ -1936,13 +1936,18 @@
         <label>问题说明<textarea name="content" required maxlength="2000" placeholder="请描述问题、发生时间、相关钱包或交易哈希、希望平台协助的事项"></textarea></label>
         ${renderProofUploadField(inputId)}
       ` : `
-        <section class="annotation-modal-summary ticket-summary">
-          <div><span>标题</span><strong>${escapeHtml(ticket.title)}</strong></div>
-          <div><span>状态</span><strong>${badge(ticketStatusMap, ticket.status)}</strong></div>
-          <div><span>类型</span><strong>${escapeHtml(ticketCategoryMap[ticket.category] || "其他问题")}</strong></div>
-          <div><span>优先级</span><strong>${badge(ticketPriorityMap, ticket.priority)}</strong></div>
-          <div><span>提交人</span><strong>${escapeHtml(userName(ticket.createdBy))}</strong></div>
-          <div><span>更新时间</span><strong>${formatDate(ticket.updatedAt || ticket.createdAt)}</strong></div>
+        <section class="ticket-detail-summary">
+          <div class="ticket-detail-title">
+            <span>标题</span>
+            <strong>${escapeHtml(ticket.title)}</strong>
+          </div>
+          <div class="ticket-detail-meta">
+            <div><span>状态</span><strong>${badge(ticketStatusMap, ticket.status)}</strong></div>
+            <div><span>优先级</span><strong>${badge(ticketPriorityMap, ticket.priority)}</strong></div>
+            <div><span>类型</span><strong>${escapeHtml(ticketCategoryMap[ticket.category] || "其他问题")}</strong></div>
+            <div><span>提交人</span><strong>${escapeHtml(userName(ticket.createdBy))}</strong></div>
+            <div><span>更新时间</span><strong>${formatDate(ticket.updatedAt || ticket.createdAt)}</strong></div>
+          </div>
         </section>
         <div class="ticket-thread">
           ${messages.map((message) => renderTicketMessage(ticket, message)).join("")}
