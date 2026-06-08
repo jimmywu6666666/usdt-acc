@@ -25,7 +25,7 @@
   const statusMap = {
     unannotated: ["待批注", "orange"],
     pending: ["待审核", "amber"],
-    approved: ["已通过", "green"],
+    approved: ["已审核", "green"],
     rejected: ["已驳回", "red"],
     corrected: ["已被修正", "blue"],
     reversed: ["已被冲正", "gray"],
@@ -33,7 +33,7 @@
     non_business: ["非业务流水", "gray"],
     restored: ["已恢复待批注", "orange"],
     settlement_pending: ["平账待审核", "amber"],
-    settlement_approved: ["平账已通过", "green"],
+    settlement_approved: ["平账已审核", "green"],
     settlement_rejected: ["平账已驳回", "red"],
     settlement_revoked: ["平账已撤销", "gray"],
     historical: ["历史无需批注", "gray"],
@@ -53,7 +53,7 @@
   };
   const rpSettlementStatusMap = {
     pending: ["待审核", "amber"],
-    approved: ["平账已通过", "green"],
+    approved: ["平账已审核", "green"],
     rejected: ["平账已驳回", "red"],
     revoked: ["已撤销", "gray"],
   };
@@ -898,7 +898,7 @@
     return `
       ${pageHead("资金概况", "汇总业务已审核数据、钱包实际流水、链上余额变化和往来款概况")}
       ${syncErrors.length ? `<div class="notice danger">链上同步异常：${syncErrors.map((wallet) => `${wallet.alias}（${wallet.lastSyncError}）`).join("；")}</div>` : ""}
-      <div class="section-label"><h3>业务已审核</h3><span>统计已通过的普通批注和平账业务</span></div>
+      <div class="section-label"><h3>业务已审核</h3><span>统计已审核的普通批注和平账业务</span></div>
       <section class="dashboard-business-block">
         <div class="grid stats">
           ${periods.map((period) => {
@@ -1104,7 +1104,7 @@
         <label>开始日期<input type="date" name="from" value="${escapeHtml(entryFilters.from)}"></label>
         <label>结束日期<input type="date" name="to" value="${escapeHtml(entryFilters.to)}"></label>
         <label>方向<select name="direction"><option value="">全部</option><option value="income" ${selectedFilter("direction", "income")}>进账</option><option value="expense" ${selectedFilter("direction", "expense")}>出账</option><option value="transfer" ${selectedFilter("direction", "transfer")}>内部划转</option></select></label>
-        <label>批注状态<select name="status"><option value="">全部</option><option value="unannotated" ${selectedFilter("status", "unannotated")}>待批注</option><option value="non_business" ${selectedFilter("status", "non_business")}>非业务流水</option><option value="transfer_pending" ${selectedFilter("status", "transfer_pending")}>内部划转待确认</option><option value="historical" ${selectedFilter("status", "historical")}>历史无需批注</option><option value="pending" ${selectedFilter("status", "pending")}>待审核</option><option value="settlement_pending" ${selectedFilter("status", "settlement_pending")}>平账待审核</option><option value="approved" ${selectedFilter("status", "approved")}>已通过</option><option value="settlement_approved" ${selectedFilter("status", "settlement_approved")}>平账已通过</option><option value="rejected" ${selectedFilter("status", "rejected")}>已驳回</option><option value="settlement_rejected" ${selectedFilter("status", "settlement_rejected")}>平账已驳回</option><option value="reversal" ${selectedFilter("status", "reversal")}>已冲正</option><option value="settlement_revoked" ${selectedFilter("status", "settlement_revoked")}>平账已撤销</option></select></label>
+        <label>批注状态<select name="status"><option value="">全部</option><option value="unannotated" ${selectedFilter("status", "unannotated")}>待批注</option><option value="non_business" ${selectedFilter("status", "non_business")}>非业务流水</option><option value="transfer_pending" ${selectedFilter("status", "transfer_pending")}>内部划转待确认</option><option value="historical" ${selectedFilter("status", "historical")}>历史无需批注</option><option value="pending" ${selectedFilter("status", "pending")}>待审核</option><option value="settlement_pending" ${selectedFilter("status", "settlement_pending")}>平账待审核</option><option value="approved" ${selectedFilter("status", "approved")}>已审核</option><option value="settlement_approved" ${selectedFilter("status", "settlement_approved")}>平账已审核</option><option value="rejected" ${selectedFilter("status", "rejected")}>已驳回</option><option value="settlement_rejected" ${selectedFilter("status", "settlement_rejected")}>平账已驳回</option><option value="reversal" ${selectedFilter("status", "reversal")}>已冲正</option><option value="settlement_revoked" ${selectedFilter("status", "settlement_revoked")}>平账已撤销</option></select></label>
         <label>钱包<select name="walletId"><option value="">全部</option>${tenantWallets().map((wallet) => `<option value="${wallet.id}" ${selectedFilter("walletId", wallet.id)}>${wallet.alias}</option>`).join("")}</select></label>
         <label>最小金额<input type="number" name="minAmount" step="0.01" value="${escapeHtml(entryFilters.minAmount)}"></label>
         <label>最大金额<input type="number" name="maxAmount" step="0.01" value="${escapeHtml(entryFilters.maxAmount)}"></label>
@@ -2371,7 +2371,7 @@
         ])}
         ${helpSection("二、总览", [
           "总览用于查看本系统现金流概况，包括业务已审核、待处理业务、钱包实际流水、往来款概况、链上钱包余额和最近流水。",
-          "正式业务统计以已通过的普通批注和平账业务为准，待审核或已驳回的记录不会直接计入正式业务统计。",
+          "正式业务统计以已审核的普通批注和平账业务为准，待审核或已驳回的记录不会直接计入正式业务统计。",
           "钱包实际流水按链上进出统计，不区分是否已批注或审核，适合和业务已审核数据进行对比。",
           "往来款概况用于查看应收、应付、已平、未平、多收和多付情况。",
           "链上钱包余额显示当前链上余额以及今日、本月余额变化，便于核对钱包实际现金流。",
@@ -2380,7 +2380,7 @@
           "流水账目用于查看已经同步到系统里的 TRC20 USDT 链上流水。",
           "待批注表示链上已有流水但还没有补充业务信息。",
           "待审核表示已经提交批注，等待主管审核。",
-          "已通过表示主管审核通过，计入业务统计；平账已通过也会计入业务统计。",
+          "已审核表示主管审核通过，计入业务统计；平账已审核也会计入业务统计。",
           "已驳回表示主管退回，员工可以修改后重新提交。",
           "已被修正表示已有新的修正版本通过，原版本保留但不再作为当前有效版本。",
           "已被冲正表示该流水保留历史，但不再计入业务收支。",
@@ -2402,7 +2402,7 @@
           "审核时需要确认业务原由是否清楚、分类是否正确、凭证是否能证明该笔收付款，以及链上金额、方向、钱包是否与实际业务一致。",
           "审核通过后，该批注成为当前有效记录，并进入业务统计。",
           "驳回时必须填写原因，员工修改后可重新提交。",
-          "已通过记录需要调整时，主管可发起修正或冲正。",
+          "已审核记录需要调整时，主管可发起修正或冲正。",
           "修正用于分类、说明、凭证等内容需要调整的情况；修正通过后新版本生效。",
           "冲正用于该笔不应继续计入业务收支或需要重新处理的情况；冲正通过后链上流水恢复为待处理，可重新批注、重新平账或标记非业务。",
         ])}
@@ -2419,7 +2419,7 @@
           "一笔往来款可以通过多笔链上流水分多次平账。",
           "如果实际收付金额超过往来款金额，系统会显示多收或多付金额。",
           "平账也需要上传或粘贴凭证；平账通过后会生成平应收款或平应付款业务记录，并计入业务统计。",
-          "员工提交平账后由主管审核，主管自己提交的平账直接确认；已通过平账如有错误，可由主管撤销，撤销后流水恢复待处理。",
+          "员工提交平账后由主管审核，主管自己提交的平账直接确认；已审核平账如有错误，可由主管撤销，撤销后流水恢复待处理。",
         ])}
         ${helpSection("七、钱包管理", [
           "主管可新增 TRC20 USDT 钱包、设置钱包纳入管理起始时间、查看链上余额和同步状态、停用或启用钱包、手动触发链上同步。",
@@ -2478,7 +2478,7 @@
           "主管审核时不要只看金额，应结合业务说明和凭证确认。",
           "发现链上流水和业务说明不一致时，优先驳回让员工补充或修改。",
           "应收应付尽量及时录入，避免平账时忘记业务来源。",
-          "已通过记录需要调整时，使用修正或冲正，不要覆盖历史。",
+          "已审核记录需要调整时，使用修正或冲正，不要覆盖历史。",
           "遇到续费、同步、账号或系统异常时，主管优先通过工单中心提交，方便保留处理记录。",
         ])}
       </section>

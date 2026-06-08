@@ -271,7 +271,7 @@ export function requestAnnotationCorrection(state, { user, annotationId, input, 
   reconcileState(state);
   const previous = findAnnotation(state, annotationId);
   assertTenantSubscriptionActive(state, previous.tenantId);
-  if (previous.status !== "approved" || previous.correctionType === "reversal") throw badRequest("只有当前已通过批注可以申请修正");
+  if (previous.status !== "approved" || previous.correctionType === "reversal") throw badRequest("只有当前已审核批注可以申请修正");
   if (user.role === "employee" && previous.annotatedBy !== user.id) throw forbidden("只能修正自己提交的批注");
   if (user.role !== "admin" && previous.tenantId !== user.tenantId) throw forbidden("没有操作该批注的权限");
   const tx = getVisibleTransaction(state, user, previous.chainTxId);
@@ -287,7 +287,7 @@ export function requestAnnotationReversal(state, { user, annotationId, reason, n
   reconcileState(state);
   const previous = findAnnotation(state, annotationId);
   assertTenantSubscriptionActive(state, previous.tenantId);
-  if (previous.status !== "approved" || previous.correctionType === "reversal") throw badRequest("只有当前已通过批注可以申请冲正");
+  if (previous.status !== "approved" || previous.correctionType === "reversal") throw badRequest("只有当前已审核批注可以申请冲正");
   if (user.role === "employee" && previous.annotatedBy !== user.id) throw forbidden("只能冲正自己提交的批注");
   if (user.role !== "admin" && previous.tenantId !== user.tenantId) throw forbidden("没有操作该批注的权限");
   const reversalReason = String(reason || "").trim();
@@ -560,7 +560,7 @@ export function revokeReceivableSettlement(state, { user, settlementId, reason, 
   if (!settlement) throw notFound("平账记录不存在");
   assertTenantSubscriptionActive(state, settlement.tenantId);
   assertSupervisorOrAdmin(state, user, settlement.tenantId);
-  if (settlement.status !== "approved") throw badRequest("只有已通过平账可以撤销");
+  if (settlement.status !== "approved") throw badRequest("只有已审核平账可以撤销");
   const revokeReason = String(reason || "").trim();
   if (!revokeReason) throw badRequest("请输入撤销原因");
   settlement.status = "revoked";
@@ -1788,7 +1788,7 @@ function annotationStatusLabel(annotation) {
   if (annotation.settlementId) {
     return {
       pending: "平账待审核",
-      approved: "平账已通过",
+      approved: "平账已审核",
       rejected: "平账已驳回",
       revoked: "平账已撤销",
     }[annotation.status] || annotation.status;
@@ -1796,7 +1796,7 @@ function annotationStatusLabel(annotation) {
   if (annotation.correctionType === "reversal" && annotation.status === "approved") return "已冲正";
   return {
     pending: "待审核",
-    approved: "已通过",
+    approved: "已审核",
     rejected: "已驳回",
     corrected: "已被修正",
     reversed: "已被冲正",
