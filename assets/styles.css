@@ -983,6 +983,11 @@ textarea {
   color: #fff;
 }
 
+.btn.settle {
+  background: #2563eb;
+  color: #fff;
+}
+
 .btn.warn {
   background: #fff7ed;
   color: var(--amber);

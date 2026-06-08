@@ -1043,7 +1043,7 @@
   function transactionActions(tx, annotation) {
     const actions = [`<button class="btn" data-detail="${tx.id}">详情</button>`];
     if (!annotation && isManagedTransaction(tx) && tx.internalTransferStatus !== "pending") actions.push(`<button class="btn primary" data-annotate-tx="${tx.id}">批注</button>`);
-    if (canSettleTransaction(tx)) actions.push(`<button class="btn primary" data-settle-tx="${tx.id}">${transactionDirection(tx) === "income" ? "平应收" : "平应付"}</button>`);
+    if (canSettleTransaction(tx)) actions.push(`<button class="btn settle" data-settle-tx="${tx.id}">${transactionDirection(tx) === "income" ? "平应收" : "平应付"}</button>`);
     if (!annotation && isManagedTransaction(tx) && tx.internalTransferStatus !== "pending" && canManageNonBusiness()) actions.push(`<button class="btn warn" data-non-business="${tx.id}">非业务</button>`);
     if (annotation?.status === "non_business" && canManageNonBusiness()) actions.push(`<button class="btn" data-restore-non-business="${annotation.id}">恢复待批注</button>`);
     if (annotation?.status === "rejected" && canEditAnnotation(annotation)) actions.push(`<button class="btn primary" data-resubmit="${annotation.id}">修改重提</button>`);
