@@ -15,6 +15,7 @@ import {
   createTenant,
   createWallet,
   disableWallet,
+  enableWallet,
   exportAnnotationsCsv,
   getAnnotationAttachment,
   getAuditLogsForUser,
@@ -387,6 +388,17 @@ async function handleApi(req, res, pathname) {
     const state = await storage.mutateState(async (current) => {
       const { user } = await authenticate(current);
       disableWallet(current, { user, walletId: disableWalletMatch[1] });
+      return current;
+    });
+    respond(200, { ok: true, state });
+    return;
+  }
+
+  const enableWalletMatch = pathname.match(/^\/api\/wallets\/([^/]+)\/enable$/);
+  if (enableWalletMatch && req.method === "PATCH") {
+    const state = await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      enableWallet(current, { user, walletId: enableWalletMatch[1] });
       return current;
     });
     respond(200, { ok: true, state });

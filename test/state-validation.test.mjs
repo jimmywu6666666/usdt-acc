@@ -7,6 +7,7 @@ import {
   createTenant,
   createWallet,
   disableWallet,
+  enableWallet,
   enforceTenantSubscriptions,
   exportAnnotationsCsv,
   getAnnotationAttachment,
@@ -350,6 +351,8 @@ test("supervisor manages wallets, employees and visibility permissions", () => {
   updateEmployeePermission(state, { user: user(state, "sup"), employeeId: "emp", canViewAll: false });
   disableWallet(state, { user: user(state, "sup"), walletId: "wallet" });
   assert.equal(state.wallets.find((item) => item.id === "wallet").enabled, false);
+  enableWallet(state, { user: user(state, "sup"), walletId: "wallet" });
+  assert.equal(state.wallets.find((item) => item.id === "wallet").enabled, true);
   assert.equal(user(state, "emp").canViewAll, false);
 });
 

@@ -428,6 +428,17 @@ export function disableWallet(state, { user, walletId, now = new Date().toISOStr
   return wallet;
 }
 
+export function enableWallet(state, { user, walletId, now = new Date().toISOString() }) {
+  const wallet = state.wallets.find((item) => item.id === walletId);
+  if (!wallet) throw notFound("钱包不存在");
+  assertSupervisor(state, user.id, wallet.tenantId);
+  wallet.enabled = true;
+  wallet.enabledAt = now;
+  wallet.enabledBy = user.id;
+  appendLog(state, { tenantId: wallet.tenantId, userId: user.id, action: "启用钱包", target: wallet.alias, createdAt: now });
+  return wallet;
+}
+
 export function createEmployee(state, { user, input, now = new Date().toISOString() }) {
   assertSupervisor(state, user.id, user.tenantId);
   const name = String(input.name || "").trim();

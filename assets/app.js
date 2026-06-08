@@ -43,6 +43,7 @@
     "审核通过冲正",
     "新增钱包并设置纳入管理时间",
     "停用钱包",
+    "启用钱包",
     "创建员工账号",
     "修改员工查看权限",
     "提交租用续费哈希",
@@ -664,7 +665,7 @@
           <div class="wallet-cell-head"><strong>${escapeHtml(wallet.alias)}</strong>${status}</div>
           <div class="wallet-cell-meta">${escapeHtml(wallet.chain)} · 管理起点：${formatDate(wallet.managedFrom)}</div>
           ${syncText ? `<div class="wallet-cell-sync">${syncText}</div>` : ""}
-          ${showActions ? `<div class="wallet-cell-actions">${wallet.enabled ? `<button class="btn small danger" data-disable-wallet="${wallet.id}">停用</button>` : `<span class="muted">已停用</span>`}</div>` : ""}
+          ${showActions ? `<div class="wallet-cell-actions">${wallet.enabled ? `<button class="btn small danger" data-disable-wallet="${wallet.id}">停用</button>` : `<button class="btn small primary" data-enable-wallet="${wallet.id}">启用</button>`}</div>` : ""}
         </td>
         <td class="wallet-balance-value">${money(summary.current)}<br>${balanceChangeLine("今日变化", summary.todayChange)}<br>${balanceChangeLine("本月变化", summary.monthChange)}</td><td class="mono">${escapeHtml(wallet.address)}</td>
       </tr>`;
@@ -1332,9 +1333,9 @@
           "冲正用于该笔不应继续计入业务收支的情况；冲正通过后链上流水仍保留，但不再计入业务统计。",
         ])}
         ${helpSection("六、钱包管理", [
-          "主管可新增 TRC20 USDT 钱包、设置钱包纳入管理起始时间、查看链上余额和同步状态、停用钱包、手动触发链上同步。",
-          "钱包不能删除，只能停用。",
-          "停用钱包不影响历史流水。",
+          "主管可新增 TRC20 USDT 钱包、设置钱包纳入管理起始时间、查看链上余额和同步状态、停用或启用钱包、手动触发链上同步。",
+          "钱包不能删除，停用后可再次启用，不需要重新添加。",
+          "停用钱包不影响历史流水，启用后会重新参与链上同步。",
           "纳入管理起始时间之前的流水可查询，但默认不要求员工补批注。",
           "纳入管理起始时间创建后不可修改，避免历史流水统计口径发生变化。",
         ])}
@@ -1532,6 +1533,7 @@
     document.querySelector("[data-action='sync-chain']")?.addEventListener("click", syncChain);
     document.querySelectorAll("[data-user-view-all]").forEach((input) => input.addEventListener("change", () => updateUserPermission(input.dataset.userViewAll, input.checked)));
     document.querySelectorAll("[data-disable-wallet]").forEach((button) => button.addEventListener("click", () => disableWallet(button.dataset.disableWallet)));
+    document.querySelectorAll("[data-enable-wallet]").forEach((button) => button.addEventListener("click", () => enableWallet(button.dataset.enableWallet)));
     document.querySelectorAll("[data-annotate-tx]").forEach((button) => button.addEventListener("click", () => openAnnotation(button.dataset.annotateTx)));
     document.querySelectorAll("[data-resubmit]").forEach((button) => button.addEventListener("click", () => editRejected(button.dataset.resubmit)));
     document.querySelectorAll("[data-review-approve]").forEach((button) => button.addEventListener("click", () => review(button.dataset.reviewApprove, "approve")));
@@ -2125,6 +2127,18 @@
       await apiMutate(`/api/wallets/${encodeURIComponent(walletId)}/disable`, { method: "PATCH", body: {} });
       render();
       toast("钱包已停用");
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+
+  async function enableWallet(walletId) {
+    const wallet = state.wallets.find((item) => item.id === walletId);
+    if (!wallet || !confirm(`确认启用钱包「${wallet.alias}」？启用后会重新参与链上同步。`)) return;
+    try {
+      await apiMutate(`/api/wallets/${encodeURIComponent(walletId)}/enable`, { method: "PATCH", body: {} });
+      render();
+      toast("钱包已启用");
     } catch (error) {
       toast(error.message);
     }
