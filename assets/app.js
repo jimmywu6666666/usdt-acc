@@ -899,10 +899,9 @@
                 <option value="today">从今天开始</option>
                 <option value="7">最近 7 天</option>
                 <option value="30">最近 30 天</option>
-                <option value="custom">自定义时间</option>
               </select>
             </label>
-            <label>纳入管理起始时间<input name="managedFrom" type="datetime-local" value="${managedFromPreset("today")}" required data-managed-from></label>
+            <label>纳入管理起始时间<input name="managedFrom" type="datetime-local" value="${managedFromPreset("today")}" required readonly data-managed-from></label>
             <div class="actions"><button class="btn primary" type="submit">新增钱包</button></div>
           </form>
         </div>
@@ -1334,6 +1333,7 @@
         ])}
         ${helpSection("六、钱包管理", [
           "主管可新增 TRC20 USDT 钱包、设置钱包纳入管理起始时间、查看链上余额和同步状态、停用或启用钱包、手动触发链上同步。",
+          "纳入管理范围只能选择从今天开始、最近 7 天或最近 30 天。",
           "钱包不能删除，停用后可再次启用，不需要重新添加。",
           "停用钱包不影响历史流水，启用后会重新参与链上同步。",
           "停用钱包只是暂停自动同步和新增待办，重新启用后会自动补同步停用期间的链上流水。",
@@ -1515,7 +1515,6 @@
     document.querySelector("[data-cancel-edit]")?.addEventListener("click", () => { state.editingAnnotationId = null; render(); });
     document.querySelector("#walletForm")?.addEventListener("submit", submitWallet);
     document.querySelector("[data-managed-preset]")?.addEventListener("change", (event) => {
-      if (event.target.value === "custom") return;
       document.querySelector("[data-managed-from]").value = managedFromPreset(event.target.value);
     });
     document.querySelector("#userForm")?.addEventListener("submit", submitUser);

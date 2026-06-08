@@ -380,6 +380,20 @@ test("wallet management start time cannot be changed after creation", () => {
   assert.equal(state.auditLogs.length, 0);
 });
 
+test("wallet management start time cannot be older than 30 days", () => {
+  const state = ledgerState();
+  assert.throws(() => createWallet(state, {
+    user: user(state, "sup"),
+    input: {
+      alias: "历史钱包",
+      chain: "TRC20",
+      address: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+      managedFrom: "2026-05-01T00:00:00.000Z",
+    },
+    now: "2026-06-06T01:00:00.000Z",
+  }), /最近 30 天/);
+});
+
 test("admin creates tenants and global categories", () => {
   const state = ledgerState();
   createTenant(state, { user: user(state, "admin"), input: { name: "Beta", supervisorName: "Beta 主管" } });

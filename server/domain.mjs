@@ -1096,7 +1096,11 @@ function parseManagedFrom(value, now) {
   if (!value) return startOfLocalDay(new Date(now)).toISOString();
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) throw badRequest("纳入管理起始时间不正确");
-  if (parsed.getTime() > new Date(now).getTime()) throw badRequest("纳入管理起始时间不能晚于当前时间");
+  const current = new Date(now);
+  if (parsed.getTime() > current.getTime()) throw badRequest("纳入管理起始时间不能晚于当前时间");
+  const earliest = startOfLocalDay(current);
+  earliest.setDate(earliest.getDate() - 29);
+  if (parsed.getTime() < earliest.getTime()) throw badRequest("纳入管理起始时间最多只能选择最近 30 天");
   return parsed.toISOString();
 }
 
