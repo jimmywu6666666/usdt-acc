@@ -1243,6 +1243,7 @@ export function updateSupportTicketStatus(state, { user, ticketId, status, now =
   const ticket = findSupportTicketForUser(state, user, ticketId);
   const nextStatus = String(status || "").trim();
   if (!["open", "waiting_admin", "waiting_tenant", "closed"].includes(nextStatus)) throw badRequest("工单状态不正确");
+  if (nextStatus === "open" && user.role !== "admin") throw forbidden("只有管理员可以标记工单处理中");
   if (nextStatus === "waiting_tenant" && user.role !== "admin") throw forbidden("只有管理员可以设置为待租户回复");
   if (nextStatus === "waiting_admin" && user.role === "admin") throw badRequest("管理员回复后会自动变为待租户回复");
   ticket.status = nextStatus;

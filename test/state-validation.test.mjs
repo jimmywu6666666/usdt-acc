@@ -127,6 +127,11 @@ test("supervisor creates support ticket and admin reply moves it to tenant side"
   });
   assert.equal(ticket.status, "waiting_tenant");
   assert.equal(ticket.messages.length, 2);
+  assert.throws(() => updateSupportTicketStatus(state, {
+    user: user(state, "sup"),
+    ticketId: ticket.id,
+    status: "open",
+  }), /只有管理员可以标记工单处理中/);
 
   updateSupportTicketStatus(state, {
     user: user(state, "sup"),

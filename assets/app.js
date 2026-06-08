@@ -2033,6 +2033,9 @@
     if (ticket.status === "closed") {
       return `<button class="btn" type="button" data-ticket-status="${currentUser().role === "admin" ? "waiting_tenant" : "waiting_admin"}">重新打开</button>`;
     }
+    if (currentUser().role !== "admin") {
+      return `<button class="btn danger" type="button" data-ticket-status="closed">关闭工单</button>`;
+    }
     const processing = ticket.status === "open" ? "" : `<button class="btn" type="button" data-ticket-status="open">标记处理中</button>`;
     return `${processing}<button class="btn danger" type="button" data-ticket-status="closed">关闭工单</button>`;
   }
