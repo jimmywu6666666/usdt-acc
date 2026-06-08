@@ -2355,6 +2355,7 @@
         ${editing?.rejectionReason ? `<div class="notice danger">上次驳回原因：${escapeHtml(editing.rejectionReason)}</div>` : ""}
       `,
       submitText: editing ? "重新提交审核" : "提交批注审核",
+      confirmMessage: editing ? "确认重新提交这条批注？" : "确认提交这条批注？",
       onSubmit: async (formData, close) => {
         if (!formData.get("category")) throw new Error("请选择分类");
         const attachment = await readUpload(formData.get("attachmentFile"));
@@ -2385,6 +2386,7 @@
       toast("请选择分类");
       return;
     }
+    if (!confirm(editing ? "确认重新提交这条批注？" : "确认提交这条批注？")) return;
     const attachment = await readUpload(formData.get("attachmentFile"));
     try {
       await apiMutate(editing ? `/api/annotations/${encodeURIComponent(editing.id)}/resubmit` : "/api/annotations", {
@@ -2435,6 +2437,7 @@
         </label>
       `,
       submitText: "提交修正",
+      confirmMessage: "确认提交这条修正申请？",
       onSubmit: async (formData, close) => {
         await apiMutate(`/api/annotations/${encodeURIComponent(annotationId)}/correct`, {
           body: { category: formData.get("category"), note: formData.get("note") },
@@ -2467,6 +2470,7 @@
       `,
       submitText: "提交冲正",
       danger: true,
+      confirmMessage: "确认提交这条冲正申请？",
       onSubmit: async (formData, close) => {
         await apiMutate(`/api/annotations/${encodeURIComponent(annotationId)}/reverse`, { body: { reason: formData.get("reason") } });
         close();
@@ -2493,6 +2497,7 @@
       `,
       submitText: "标记非业务",
       danger: true,
+      confirmMessage: "确认将这条流水标记为非业务？",
       onSubmit: async (formData, close) => {
         await apiMutate(`/api/chain-transactions/${encodeURIComponent(txId)}/non-business`, {
           body: { reason: formData.get("reason") },
@@ -2513,6 +2518,7 @@
       desc: "恢复后该流水会重新进入待批注队列，可继续提交业务批注。",
       body: `<div class="notice">确认恢复：${escapeHtml(annotation.note || "非业务流水")}</div>`,
       submitText: "恢复待批注",
+      confirmMessage: "确认恢复为待批注？",
       onSubmit: async (formData, close) => {
         await apiMutate(`/api/annotations/${encodeURIComponent(annotationId)}/restore-non-business`);
         close();
@@ -2523,7 +2529,7 @@
     document.body.append(overlay);
   }
 
-  function createFormModal({ title, desc, body, submitText, danger = false, onSubmit }) {
+  function createFormModal({ title, desc, body, submitText, danger = false, confirmMessage = "", onSubmit }) {
     const overlay = document.createElement("div");
     overlay.className = "form-modal";
     overlay.innerHTML = `
@@ -2555,10 +2561,13 @@
     });
     overlay.querySelector("form").addEventListener("submit", async (event) => {
       event.preventDefault();
+      const formData = new FormData(event.target);
+      const message = typeof confirmMessage === "function" ? confirmMessage(formData) : confirmMessage;
+      if (message && !confirm(message)) return;
       const submitButton = event.target.querySelector('button[type="submit"]');
       submitButton.disabled = true;
       try {
-        await onSubmit(new FormData(event.target), close);
+        await onSubmit(formData, close);
       } catch (error) {
         submitButton.disabled = false;
         toast(error.message);
@@ -2576,6 +2585,7 @@
       toast("TRC20 钱包地址应为 T 开头的 34 位地址");
       return;
     }
+    if (!confirm(`确认新增钱包「${data.alias || data.address}」？新增后会按纳入管理时间参与链上同步。`)) return;
     try {
       await apiMutate("/api/wallets", {
         body: {
@@ -2595,6 +2605,7 @@
   async function submitUser(event) {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.target).entries());
+    if (!confirm(`确认创建员工「${data.name || ""}」？`)) return;
     try {
       await apiMutate("/api/users", { body: { name: data.name, canViewAll: data.canViewAll === "on" } });
       render();
@@ -2607,6 +2618,7 @@
   async function submitTenant(event) {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.target).entries());
+    if (!confirm(`确认开通系统「${data.name || ""}」并创建主管「${data.supervisorName || ""}」？`)) return;
     try {
       await apiMutate("/api/tenants", { body: data });
       render();
@@ -2635,6 +2647,7 @@
   async function submitSubscriptionSettings(event) {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.target).entries());
+    if (!confirm("确认保存租用收费设置？这会影响平台收款钱包、月租费用和续费开关。")) return;
     try {
       await apiMutate("/api/subscription/settings", {
         method: "PATCH",
@@ -2655,6 +2668,7 @@
   async function submitSystemSettings(event) {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.target).entries());
+    if (!confirm(`确认保存系统限制？钱包启用上限将设置为 ${data.walletEnabledLimit || 0} 个。`)) return;
     try {
       await apiMutate("/api/system/settings", {
         method: "PATCH",
@@ -2683,6 +2697,7 @@
     event.preventDefault();
     const formData = new FormData(event.target);
     const data = Object.fromEntries(formData.entries());
+    if (!confirm(`确认新增${data.type === "payable" ? "应付款" : "应收款"}「${data.counterparty || ""}」，金额 ${data.amount || 0} USDT？`)) return;
     try {
       const attachment = await readUpload(formData.get("attachmentFile"));
       await apiMutate("/api/receivable-payables", {
@@ -2743,6 +2758,7 @@
         <label><span class="field-label">平账说明 <em class="optional-mark">选填</em></span><textarea name="note" placeholder="可填写本次平账说明"></textarea></label>
       `,
       submitText: "提交平账",
+      confirmMessage: `确认提交这条${typeText}平账？`,
       onSubmit: async (formData, close) => {
         const itemId = formData.get("itemId");
         if (!itemId) throw new Error(`请选择需要平账的${typeText}`);
@@ -2934,6 +2950,10 @@
         <label>处理原因<textarea name="reason" required placeholder="填写体外收费、金额异常或人工处理原因">${escapeHtml(defaultReason)}</textarea></label>
       `,
       submitText: "确认续费",
+      confirmMessage: (formData) => {
+        const tenant = state.tenants.find((item) => item.id === (fixedTenantId || formData.get("tenantId")));
+        return `确认给「${tenant?.name || "所选系统"}」续费 ${formData.get("months") || 0} 个月 ${formData.get("days") || 0} 天？`;
+      },
       onSubmit: async (formData, close) => {
         const months = Number(formData.get("months") || 0);
         const days = Number(formData.get("days") || 0);
@@ -2980,6 +3000,11 @@
   }
 
   async function updateUserPermission(userId, canViewAll) {
+    const user = state.users.find((item) => item.id === userId);
+    if (!confirm(`确认${canViewAll ? "允许" : "取消"}「${user?.name || "该员工"}」查看全部账目？`)) {
+      render();
+      return;
+    }
     try {
       await apiMutate(`/api/users/${encodeURIComponent(userId)}/permission`, { method: "PATCH", body: { canViewAll } });
       render();
