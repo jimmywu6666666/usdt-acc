@@ -1923,6 +1923,7 @@
   function openTicketModal(ticket = null) {
     const isNew = !ticket;
     const messages = ticket?.messages || [];
+    const inputId = `ticket-proof-${ticket?.id || Date.now()}`;
     const overlay = createFormModal({
       title: isNew ? "提交工单" : "工单处理",
       desc: isNew ? "请写清楚问题、影响范围和需要平台协助的内容。" : `${tenantName(ticket.tenantId)} · ${ticketCategoryMap[ticket.category] || "其他问题"}`,
@@ -1933,6 +1934,7 @@
         <label>优先级<select name="priority"><option value="normal">一般</option><option value="urgent">紧急</option><option value="low">普通</option></select></label>
         <label>工单标题<input name="title" maxlength="80" required placeholder="例如：续费哈希提交后未开通"></label>
         <label>问题说明<textarea name="content" required maxlength="2000" placeholder="请描述问题、发生时间、相关钱包或交易哈希、希望平台协助的事项"></textarea></label>
+        ${renderProofUploadField(inputId)}
       ` : `
         <section class="annotation-modal-summary ticket-summary">
           <div><span>标题</span><strong>${escapeHtml(ticket.title)}</strong></div>
@@ -1943,22 +1945,25 @@
           <div><span>更新时间</span><strong>${formatDate(ticket.updatedAt || ticket.createdAt)}</strong></div>
         </section>
         <div class="ticket-thread">
-          ${messages.map((message) => renderTicketMessage(message)).join("")}
+          ${messages.map((message) => renderTicketMessage(ticket, message)).join("")}
         </div>
         ${ticket.status === "closed" ? `<div class="notice">该工单已关闭，如需继续沟通可重新打开。</div>` : `
           <label>回复内容<textarea name="content" maxlength="2000" required placeholder="补充处理结果、截图说明或需要对方确认的信息"></textarea></label>
+          ${renderProofUploadField(inputId)}
         `}
       `,
       submitText: isNew ? "提交工单" : ticket?.status === "closed" ? "关闭" : "提交回复",
       confirmMessage: isNew ? "确认提交这张工单？" : ticket?.status === "closed" ? "" : "确认提交这条工单回复？",
       onSubmit: async (formData, close) => {
         if (isNew) {
+          const attachment = await readUpload(formData.get("attachmentFile"));
           await apiMutate("/api/support-tickets", {
             body: {
               category: formData.get("category"),
               priority: formData.get("priority"),
               title: formData.get("title"),
               content: formData.get("content"),
+              attachment,
             },
           });
           close();
@@ -1967,8 +1972,9 @@
           return;
         }
         if (ticket.status !== "closed") {
+          const attachment = await readUpload(formData.get("attachmentFile"));
           await apiMutate(`/api/support-tickets/${encodeURIComponent(ticket.id)}/replies`, {
-            body: { content: formData.get("content") },
+            body: { content: formData.get("content"), attachment },
           });
           close();
           render();
@@ -1979,7 +1985,11 @@
       },
     });
     document.body.append(overlay);
+    bindProofUpload(overlay);
     if (!isNew) {
+      overlay.querySelectorAll("[data-ticket-attachment]").forEach((button) => button.addEventListener("click", () => {
+        previewTicketAttachment(button.dataset.ticketId, button.dataset.messageId);
+      }));
       overlay.querySelector(".form-modal-actions").insertAdjacentHTML("afterbegin", renderTicketStatusActions(ticket));
       overlay.querySelectorAll("[data-ticket-status]").forEach((button) => button.addEventListener("click", async (event) => {
         event.preventDefault();
@@ -1989,13 +1999,29 @@
     }
   }
 
-  function renderTicketMessage(message) {
+  function renderTicketMessage(ticket, message) {
     const actor = state.users.find((item) => item.id === message.userId);
     const side = actor?.role === "admin" ? "admin" : "tenant";
     return `<article class="ticket-message ${side}">
       <div><strong>${escapeHtml(userName(message.userId))}</strong><span>${formatDate(message.createdAt)}</span></div>
       <p>${escapeHtml(message.content)}</p>
+      ${message.attachmentName ? `<button class="attachment-link" type="button" data-ticket-attachment data-ticket-id="${escapeHtml(ticket.id)}" data-message-id="${escapeHtml(message.id)}">${escapeHtml(message.attachmentName)}</button>` : ""}
     </article>`;
+  }
+
+  function renderProofUploadField(inputId) {
+    return `<div class="proof-field">
+      <span>附件上传 <em class="optional-mark">选填，仅图片</em></span>
+      <div class="proof-upload" data-proof-upload tabindex="0">
+        <input id="${escapeHtml(inputId)}" name="attachmentFile" type="file" accept="image/*">
+        <label class="btn" for="${escapeHtml(inputId)}">上传图片</label>
+        <span class="proof-upload-hint">或点击此处后粘贴截图</span>
+        <div class="proof-preview" data-proof-preview hidden>
+          <img data-proof-image alt="附件预览">
+          <span data-proof-name></span>
+        </div>
+      </div>
+    </div>`;
   }
 
   function renderTicketStatusActions(ticket) {
@@ -2158,7 +2184,7 @@
         <div class="panel">
           <div class="panel-title"><h3>附件凭证空间</h3><span>${formatDate(serverMetrics.capturedAt)}</span></div>
           <div class="metric-list">
-            <div><span>凭证数量</span><strong>${serverMetrics.attachments.annotationCount}</strong></div>
+            <div><span>图片附件数量</span><strong>${serverMetrics.attachments.annotationCount}</strong></div>
             <div><span>附件文件</span><strong>${serverMetrics.attachments.fileCount}</strong></div>
             <div><span>附件目录占用</span><strong>${formatBytes(serverMetrics.attachments.totalBytes)}</strong></div>
             <div><span>记录内大小</span><strong>${formatBytes(serverMetrics.attachments.storedAttachmentBytes)}</strong></div>
@@ -2342,6 +2368,7 @@
           "主管可通过工单中心向平台提交问题并查看处理进度。",
           "适合提交工单的情况包括租用续费提交后状态没有变化、钱包同步异常、链上流水长时间未同步、账号登录或登录密钥需要协助处理、系统功能使用中遇到异常。",
           "提交工单时建议写清楚问题发生时间、涉及的钱包或交易哈希、已经尝试过的处理方式，以及希望平台协助确认或处理的事项。",
+          "如有错误页面、链上截图或转账凭证，可上传图片附件，也可以直接粘贴截图。",
           "待平台回复表示平台需要查看或处理；待租户回复表示需要主管补充信息或确认；处理中表示问题正在跟进；已关闭表示问题已经处理完成。",
         ])}
         ${helpSection("十一、链上查询", [
@@ -3916,6 +3943,11 @@
     return previewProof(`/api/receivable-payables/${encodeURIComponent(itemId)}/attachment`);
   }
 
+  async function previewTicketAttachment(ticketId, messageId) {
+    if (!ticketId || !messageId) return;
+    return previewProof(`/api/support-tickets/${encodeURIComponent(ticketId)}/messages/${encodeURIComponent(messageId)}/attachment`);
+  }
+
   async function previewProof(url) {
     try {
       const response = await fetch(url, { headers: authHeaders() });
@@ -3974,8 +4006,8 @@
 
   async function readUpload(file) {
     if (!(file instanceof File) || !file.size) return null;
-    if (file.size > 10 * 1024 * 1024) throw new Error("凭证图片不能超过 10MB");
-    if (!file.type.startsWith("image/")) throw new Error("凭证只支持图片");
+    if (file.size > 10 * 1024 * 1024) throw new Error("图片附件不能超过 10MB");
+    if (!file.type.startsWith("image/")) throw new Error("附件只支持图片");
     const dataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result);

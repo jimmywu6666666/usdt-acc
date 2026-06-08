@@ -573,6 +573,15 @@ export function getAnnotationAttachment(state, { user, annotationId }) {
   return annotation.attachment;
 }
 
+export function getSupportTicketAttachment(state, { user, ticketId, messageId }) {
+  reconcileState(state);
+  const ticket = findSupportTicketForUser(state, user, ticketId);
+  const message = (ticket.messages || []).find((item) => item.id === messageId);
+  if (!message) throw notFound("工单消息不存在");
+  if (!message.attachment) throw notFound("该工单消息没有附件");
+  return message.attachment;
+}
+
 export function walletBalance(chainTransactions, walletId) {
   return chainTransactions.reduce((sum, tx) => {
     if (tx.walletId !== walletId || !tx.confirmed) return sum;
@@ -1185,6 +1194,8 @@ export function createSupportTicket(state, { user, input, now = new Date().toISO
       id: id("msg"),
       userId: user.id,
       content,
+      attachmentName: input.attachment?.name || "",
+      attachment: input.attachment || null,
       createdAt: now,
     }],
   };
@@ -1211,6 +1222,8 @@ export function replySupportTicket(state, { user, ticketId, content, now = new D
     id: id("msg"),
     userId: user.id,
     content: text,
+    attachmentName: "",
+    attachment: null,
     createdAt: now,
   });
   ticket.status = user.role === "admin" ? "waiting_tenant" : "waiting_admin";

@@ -17,6 +17,7 @@ import {
   getAnnotationAttachment,
   getAuditLogsForUser,
   getReceivableAttachment,
+  getSupportTicketAttachment,
   getTransactionDetail,
   manualRenewSubscriptionPayment,
   manualRenewTenantSubscription,
@@ -135,6 +136,36 @@ test("supervisor creates support ticket and admin reply moves it to tenant side"
   });
   assert.equal(ticket.status, "closed");
   assert.equal(ticket.closedBy, "sup");
+});
+
+test("support ticket attachments follow tenant permissions", () => {
+  const state = ledgerState({
+    tenants: [
+      { id: "tenant_alpha", name: "Alpha", enabled: true, subscriptionExpiresAt: "2026-12-31T00:00:00.000Z", subscriptionStatus: "active" },
+      { id: "tenant_beta", name: "Beta", enabled: true, subscriptionExpiresAt: "2026-12-31T00:00:00.000Z", subscriptionStatus: "active" },
+    ],
+    users: [
+      { id: "admin", tenantId: null, name: "管理员", role: "admin", canViewAll: true },
+      { id: "sup", tenantId: "tenant_alpha", name: "主管", role: "supervisor", canViewAll: true },
+      { id: "beta_sup", tenantId: "tenant_beta", name: "Beta 主管", role: "supervisor", canViewAll: true },
+    ],
+  });
+  const ticket = createSupportTicket(state, {
+    user: user(state, "sup"),
+    input: {
+      title: "同步异常",
+      content: "钱包同步状态截图",
+      attachment: { name: "sync-error.png", dataUrl: "data:image/png;base64,YQ==" },
+    },
+  });
+  const messageId = ticket.messages[0].id;
+  assert.equal(getSupportTicketAttachment(state, { user: user(state, "sup"), ticketId: ticket.id, messageId }).name, "sync-error.png");
+  assert.equal(getSupportTicketAttachment(state, { user: user(state, "admin"), ticketId: ticket.id, messageId }).name, "sync-error.png");
+  assert.throws(() => getSupportTicketAttachment(state, {
+    user: user(state, "beta_sup"),
+    ticketId: ticket.id,
+    messageId,
+  }), /没有操作该工单/);
 });
 
 test("support tickets are restricted to supervisors, admins and own tenant", () => {

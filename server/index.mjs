@@ -24,6 +24,7 @@ import {
   exportReceivablePayablesCsv,
   getAnnotationAttachment,
   getReceivableAttachment,
+  getSupportTicketAttachment,
   getAuditLogsForUser,
   getTransactionDetail,
   manualRenewSubscriptionPayment,
@@ -452,7 +453,8 @@ async function handleApi(req, res, pathname) {
     const body = await readJsonBody(req);
     const state = await storage.mutateState(async (current) => {
       const { user } = await authenticate(current);
-      createSupportTicket(current, { user, input: body });
+      const ticket = createSupportTicket(current, { user, input: { ...body, attachment: null } });
+      await storeSupportTicketMessageUpload(ticket, ticket.messages.at(-1), body.attachment);
       return current;
     });
     respond(200, { ok: true, state });
@@ -464,7 +466,8 @@ async function handleApi(req, res, pathname) {
     const body = await readJsonBody(req);
     const state = await storage.mutateState(async (current) => {
       const { user } = await authenticate(current);
-      replySupportTicket(current, { user, ticketId: supportTicketReply[1], content: body.content });
+      const ticket = replySupportTicket(current, { user, ticketId: supportTicketReply[1], content: body.content });
+      await storeSupportTicketMessageUpload(ticket, ticket.messages.at(-1), body.attachment);
       return current;
     });
     respond(200, { ok: true, state });
@@ -877,6 +880,30 @@ async function handleApi(req, res, pathname) {
     return;
   }
 
+  const supportTicketAttachment = pathname.match(/^\/api\/support-tickets\/([^/]+)\/messages\/([^/]+)\/attachment$/);
+  if (supportTicketAttachment && req.method === "GET") {
+    let attachment;
+    await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      attachment = getSupportTicketAttachment(current, {
+        user,
+        ticketId: supportTicketAttachment[1],
+        messageId: supportTicketAttachment[2],
+      });
+      const ticket = (current.supportTickets || []).find((item) => item.id === supportTicketAttachment[1]);
+      appendLog(current, {
+        tenantId: ticket?.tenantId || null,
+        userId: user.id,
+        action: "查看工单附件",
+        target: `${supportTicketAttachment[1]}:${supportTicketAttachment[2]}`,
+      });
+      return current;
+    });
+    const file = await attachmentStore.read(attachment);
+    sendAttachment(res, file);
+    return;
+  }
+
   respond(404, { error: "API 不存在" });
 }
 
@@ -941,6 +968,13 @@ async function storeReceivableUpload(item, upload) {
   item.attachmentName = stored.name;
 }
 
+async function storeSupportTicketMessageUpload(ticket, message, upload) {
+  if (!upload || !message) return;
+  const stored = await attachmentStore.saveUpload(upload, { tenantId: ticket.tenantId });
+  message.attachment = stored;
+  message.attachmentName = stored.name;
+}
+
 function sendAttachment(res, file) {
   const encodedName = encodeURIComponent(file.name).replace(/[!'()*]/g, (character) => (
     `%${character.charCodeAt(0).toString(16).toUpperCase()}`
@@ -966,6 +1000,7 @@ async function collectServerMetrics(state) {
   const proofItems = [
     ...(state.annotations || []),
     ...(state.receivablePayables || []),
+    ...(state.supportTickets || []).flatMap((ticket) => ticket.messages || []),
   ].filter((item) => item.attachment);
   const storedAttachmentBytes = proofItems.reduce((sum, item) => (
     sum + Number(item.attachment?.byteSize || 0)
@@ -1112,6 +1147,7 @@ function attachmentGrowthStats(state, { todayStart, monthStart }) {
   const proofItems = [
     ...(state.annotations || []),
     ...(state.receivablePayables || []),
+    ...(state.supportTickets || []).flatMap((ticket) => ticket.messages || []),
   ].filter((item) => item.attachment);
   const summarize = (start) => proofItems.reduce((summary, item) => {
     if (new Date(item.createdAt || item.annotatedAt || 0) < start) return summary;

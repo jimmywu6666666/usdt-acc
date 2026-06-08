@@ -11,6 +11,7 @@ export function stateForUser(state, user) {
   safeState.receivableSettlements ||= [];
   safeState.supportTickets ||= [];
   safeState.receivablePayables = safeState.receivablePayables.map(receivableForClient);
+  safeState.supportTickets = safeState.supportTickets.map(supportTicketForClient);
 
   if (user.role === "admin") {
     safeState.activeUserId = user.id;
@@ -122,6 +123,20 @@ function receivableForClient(item) {
   return {
     ...item,
     attachment: { name, originalName, mimeType, byteSize, originalByteSize, compressed },
+  };
+}
+
+function supportTicketForClient(ticket) {
+  return {
+    ...ticket,
+    messages: (ticket.messages || []).map((message) => {
+      if (!message.attachment) return message;
+      const { name, originalName, mimeType, byteSize, originalByteSize, compressed } = message.attachment;
+      return {
+        ...message,
+        attachment: { name, originalName, mimeType, byteSize, originalByteSize, compressed },
+      };
+    }),
   };
 }
 

@@ -50,6 +50,17 @@ function fixture() {
       },
       { id: "pay_b", tenantId: "tenant_beta", hash: "hash_b", amount: 100 },
     ],
+    supportTickets: [
+      {
+        id: "ticket_a", tenantId: "tenant_alpha", title: "Alpha 工单", createdBy: "sup_a", status: "waiting_admin",
+        messages: [{
+          id: "msg_a", userId: "sup_a", content: "截图",
+          attachmentName: "ticket.png",
+          attachment: { name: "ticket.png", storageKey: "tenant_alpha/ticket.webp", mimeType: "image/webp" },
+        }],
+      },
+      { id: "ticket_b", tenantId: "tenant_beta", title: "Beta 工单", createdBy: "sup_b", messages: [] },
+    ],
     subscriptionSettings: {
       enabled: true,
       monthlyFee: 100,
@@ -99,6 +110,8 @@ test("supervisors only receive their tenant data", () => {
   assert.equal(view.auditLogs.some((item) => item.id === "admin_write_log"), false);
   assert.equal(view.auditLogs.some((item) => item.id === "admin_subscription_log"), false);
   assert.equal(view.auditLogs.some((item) => item.id === "auto_subscription_log"), false);
+  assert.deepEqual(view.supportTickets.map((item) => item.id), ["ticket_a"]);
+  assert.equal("storageKey" in view.supportTickets[0].messages[0].attachment, false);
 });
 
 test("limited employees receive unannotated work and their own records only", () => {
@@ -108,6 +121,7 @@ test("limited employees receive unannotated work and their own records only", ()
   assert.deepEqual(view.annotations.map((item) => item.id), ["annotation_own"]);
   assert.deepEqual(view.auditLogs.map((item) => item.id), ["own_log"]);
   assert.deepEqual(view.platformPayments, []);
+  assert.deepEqual(view.supportTickets, []);
   assert.equal(view.users.some((item) => item.role === "admin"), false);
   assert.equal(view.users.some((item) => item.id === "emp_b"), false);
   assert.equal(view.users.some((item) => item.id === "sup_b"), false);
