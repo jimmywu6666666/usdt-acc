@@ -271,6 +271,30 @@ button {
   background: var(--panel-soft);
 }
 
+.dashboard-business-block .period-card .card-label {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 24px;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #eef3f8;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dashboard-business-block .period-card .card-foot {
+  width: fit-content;
+  margin-top: 10px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  color: #8a98aa;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .dashboard-table-block {
   align-content: start;
 }
