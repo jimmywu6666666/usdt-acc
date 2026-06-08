@@ -215,6 +215,8 @@
       if (response.status === 401) {
         session = null;
         localStorage.removeItem(SESSION_KEY);
+        localStorage.removeItem(UI_STATE_KEY);
+        return structuredClone(seed);
       }
     } catch {
       // Browser storage keeps the local preview usable.
