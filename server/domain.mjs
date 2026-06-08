@@ -1055,6 +1055,31 @@ export function enforceTenantSubscriptions(state, { user, now = new Date().toISO
   return expired;
 }
 
+export function autoCloseStaleSupportTickets(state, { now = new Date().toISOString() } = {}) {
+  reconcileState(state);
+  const closed = [];
+  const cutoff = new Date(now).getTime() - 4 * 24 * 60 * 60 * 1000;
+  for (const ticket of state.supportTickets || []) {
+    if (ticket.status !== "waiting_tenant") continue;
+    const lastUpdatedAt = new Date(ticket.updatedAt || ticket.createdAt).getTime();
+    if (!Number.isFinite(lastUpdatedAt) || lastUpdatedAt > cutoff) continue;
+    ticket.status = "closed";
+    ticket.updatedAt = now;
+    ticket.closedAt = now;
+    ticket.closedBy = "system";
+    ticket.autoClosed = true;
+    closed.push(ticket);
+    appendLog(state, {
+      tenantId: ticket.tenantId,
+      userId: "system",
+      action: "工单超时自动关闭",
+      target: ticket.id,
+      createdAt: now,
+    });
+  }
+  return closed;
+}
+
 export function createCategory(state, { user, input, now = new Date().toISOString() }) {
   assertAdmin(user);
   const type = input.type;
@@ -1213,7 +1238,6 @@ export function createSupportTicket(state, { user, input, now = new Date().toISO
 export function replySupportTicket(state, { user, ticketId, content, now = new Date().toISOString() }) {
   reconcileState(state);
   const ticket = findSupportTicketForUser(state, user, ticketId);
-  if (ticket.status === "closed") throw badRequest("已关闭工单不能继续回复");
   const text = String(content || "").trim();
   if (!text) throw badRequest("回复内容不能为空");
   if (text.length > 2000) throw badRequest("回复内容不能超过 2000 个字");
@@ -1228,6 +1252,9 @@ export function replySupportTicket(state, { user, ticketId, content, now = new D
   });
   ticket.status = user.role === "admin" ? "waiting_tenant" : "waiting_admin";
   ticket.updatedAt = now;
+  ticket.closedAt = null;
+  ticket.closedBy = null;
+  ticket.autoClosed = false;
   appendLog(state, {
     tenantId: ticket.tenantId,
     userId: user.id,

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  autoCloseStaleSupportTickets,
   createAnnotation,
   createReceivablePayable,
   createReceivableSettlement,
@@ -141,6 +142,43 @@ test("supervisor creates support ticket and admin reply moves it to tenant side"
   });
   assert.equal(ticket.status, "closed");
   assert.equal(ticket.closedBy, "sup");
+
+  replySupportTicket(state, {
+    user: user(state, "sup"),
+    ticketId: ticket.id,
+    content: "我补充一下截图和说明",
+    now: "2026-06-05T13:20:00.000Z",
+  });
+  assert.equal(ticket.status, "waiting_admin");
+  assert.equal(ticket.closedAt, null);
+  assert.equal(ticket.closedBy, null);
+  assert.equal(ticket.autoClosed, false);
+});
+
+test("waiting tenant support tickets warn then auto close after four days", () => {
+  const state = ledgerState();
+  const ticket = createSupportTicket(state, {
+    user: user(state, "sup"),
+    input: { title: "需要确认", category: "other", priority: "normal", content: "请平台处理" },
+    now: "2026-06-01T00:00:00.000Z",
+  });
+  replySupportTicket(state, {
+    user: user(state, "admin"),
+    ticketId: ticket.id,
+    content: "请确认是否恢复",
+    now: "2026-06-01T01:00:00.000Z",
+  });
+  assert.equal(ticket.status, "waiting_tenant");
+
+  assert.deepEqual(autoCloseStaleSupportTickets(state, { now: "2026-06-04T01:00:00.000Z" }), []);
+  assert.equal(ticket.status, "waiting_tenant");
+
+  const closed = autoCloseStaleSupportTickets(state, { now: "2026-06-05T01:00:00.000Z" });
+  assert.deepEqual(closed.map((item) => item.id), [ticket.id]);
+  assert.equal(ticket.status, "closed");
+  assert.equal(ticket.closedBy, "system");
+  assert.equal(ticket.autoClosed, true);
+  assert.equal(state.auditLogs[0].action, "工单超时自动关闭");
 });
 
 test("support ticket attachments follow tenant permissions", () => {

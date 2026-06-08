@@ -106,6 +106,7 @@
     "租户回复工单",
     "关闭工单",
     "更新工单状态",
+    "工单超时自动关闭",
     "导出往来款",
   ];
   const adminLogActions = [
@@ -496,6 +497,13 @@
 
   function ticketPriorityRank(priority) {
     return ({ low: 0, normal: 1, urgent: 2 })[priority] ?? 1;
+  }
+
+  function isTenantReplyStale(ticket) {
+    if (ticket.status !== "waiting_tenant") return false;
+    const lastUpdatedAt = new Date(ticket.updatedAt || ticket.createdAt).getTime();
+    if (!Number.isFinite(lastUpdatedAt)) return false;
+    return Date.now() - lastUpdatedAt >= 3 * 24 * 60 * 60 * 1000;
   }
 
   function settlementsForItem(itemId) {
@@ -1903,13 +1911,15 @@
     return `<div class="ticket-list">${tickets.map((ticket) => {
       const last = ticket.messages?.at(-1);
       const lastBy = last ? userName(last.userId) : "-";
+      const staleBadge = isTenantReplyStale(ticket) ? `<span class="badge red">超过 3 天未回复</span>` : "";
+      const autoClosedBadge = ticket.autoClosed ? `<span class="badge gray">超时关闭</span>` : "";
       return `<article class="ticket-card ticket-${escapeHtml(ticket.status)}">
         <div class="ticket-card-head">
           <div>
             <h3>${escapeHtml(ticket.title)}</h3>
             <p>${currentUser().role === "admin" ? `${escapeHtml(tenantName(ticket.tenantId))} · ` : ""}${escapeHtml(ticketCategoryMap[ticket.category] || "其他问题")} · ${escapeHtml(userName(ticket.createdBy))}</p>
           </div>
-          <div class="ticket-badges">${badge(ticketPriorityMap, ticket.priority)}${badge(ticketStatusMap, ticket.status)}</div>
+          <div class="ticket-badges">${badge(ticketPriorityMap, ticket.priority)}${badge(ticketStatusMap, ticket.status)}${staleBadge}${autoClosedBadge}</div>
         </div>
         <p class="ticket-preview">${escapeHtml(last?.content || "")}</p>
         <div class="ticket-foot">
@@ -1952,13 +1962,12 @@
         <div class="ticket-thread">
           ${messages.map((message) => renderTicketMessage(ticket, message)).join("")}
         </div>
-        ${ticket.status === "closed" ? `<div class="notice">该工单已关闭，如需继续沟通可重新打开。</div>` : `
+        ${ticket.status === "closed" ? `<div class="notice">该工单已关闭，继续回复会自动重新打开。</div>` : ""}
           <label>回复内容<textarea name="content" maxlength="2000" required placeholder="补充处理结果、截图说明或需要对方确认的信息"></textarea></label>
           ${renderProofUploadField(inputId)}
-        `}
       `,
-      submitText: isNew ? "提交工单" : ticket?.status === "closed" ? "关闭" : "提交回复",
-      confirmMessage: isNew ? "确认提交这张工单？" : ticket?.status === "closed" ? "" : "确认提交这条工单回复？",
+      submitText: isNew ? "提交工单" : ticket?.status === "closed" ? "回复并重新打开" : "提交回复",
+      confirmMessage: isNew ? "确认提交这张工单？" : ticket?.status === "closed" ? "确认回复并重新打开这张工单？" : "确认提交这条工单回复？",
       onSubmit: async (formData, close) => {
         if (isNew) {
           const attachment = await readUpload(formData.get("attachmentFile"));
@@ -1976,17 +1985,13 @@
           toast("工单已提交，等待平台回复");
           return;
         }
-        if (ticket.status !== "closed") {
-          const attachment = await readUpload(formData.get("attachmentFile"));
-          await apiMutate(`/api/support-tickets/${encodeURIComponent(ticket.id)}/replies`, {
-            body: { content: formData.get("content"), attachment },
-          });
-          close();
-          render();
-          toast("工单回复已提交");
-          return;
-        }
+        const attachment = await readUpload(formData.get("attachmentFile"));
+        await apiMutate(`/api/support-tickets/${encodeURIComponent(ticket.id)}/replies`, {
+          body: { content: formData.get("content"), attachment },
+        });
         close();
+        render();
+        toast(ticket.status === "closed" ? "工单已重新打开并回复" : "工单回复已提交");
       },
     });
     document.body.append(overlay);
@@ -2430,6 +2435,8 @@
           "提交工单时建议写清楚问题发生时间、涉及的钱包或交易哈希、已经尝试过的处理方式，以及希望平台协助确认或处理的事项。",
           "如有错误页面、链上截图或转账凭证，可上传图片附件，也可以直接粘贴截图。",
           "待平台回复表示平台需要查看或处理；待租户回复表示需要主管补充信息或确认；处理中表示问题正在跟进；已关闭表示问题已经处理完成。",
+          "待租户回复超过 3 天未回复时，工单列表会显示提醒；第 4 天仍未回复会自动关闭，关闭后仍可重新打开。",
+          "已关闭工单仍可继续回复，提交回复后会自动重新打开并转为待对方回复。",
         ])}
         ${helpSection("十一、链上查询", [
           "链上查询用于手动核查交易哈希或钱包地址。",

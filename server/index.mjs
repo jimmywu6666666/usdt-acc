@@ -10,6 +10,7 @@ import {
   appendLog,
   assertAdmin,
   assertSupervisorOrAdmin,
+  autoCloseStaleSupportTickets,
   createCategory,
   createEmployee,
   createAnnotation,
@@ -265,6 +266,7 @@ async function handleApi(req, res, pathname) {
     }
     reconcileState(state);
     const { user } = await authenticate(state);
+    if (autoCloseStaleSupportTickets(state).length) await storage.writeState(state);
     state.activeUserId = user.id;
     if (user.tenantId) state.activeTenantId = user.tenantId;
     respond(200, { state });
