@@ -56,23 +56,14 @@
   const supervisorLogActions = [
     "提交链上流水批注",
     "修改并重新提交批注",
-    "标记非业务流水",
-    "恢复非业务流水为待批注",
-    "审核通过批注",
-    "驳回批注",
     "提交批注修正",
     "提交批注冲正",
+    "审核通过批注",
+    "驳回批注",
     "审核通过修正",
     "审核通过冲正",
-    "新增钱包并设置纳入管理时间",
-    "停用钱包",
-    "启用钱包",
-    "创建员工账号",
-    "创建主管账号",
-    "重置登录密钥",
-    "重置登录密码",
-    "修改员工查看权限",
-    "提交租用续费哈希",
+    "标记非业务流水",
+    "恢复非业务流水为待批注",
     "提交应收款",
     "提交应付款",
     "审核通过往来款",
@@ -82,13 +73,22 @@
     "审核通过往来款平账",
     "驳回往来款平账",
     "作废往来款",
+    "新增钱包并设置纳入管理时间",
+    "启用钱包",
+    "停用钱包",
+    "创建主管账号",
+    "创建员工账号",
+    "修改员工查看权限",
+    "重置登录密码",
+    "重置登录密钥",
+    "提交租用续费哈希",
     "导出往来款",
   ];
   const adminLogActions = [
-    ...supervisorLogActions,
     "开通独立系统",
     "启用独立系统",
     "停用独立系统",
+    ...supervisorLogActions,
     "修改租用收费设置",
     "自动确认租用续费",
     "手工确认租用续费",
@@ -98,14 +98,15 @@
     "修改系统钱包限制",
     "新增全局分类",
     "修改全局分类",
-    "登录系统",
-    "登录失败",
+    "导出链上流水批注",
+    "导出往来款",
     "查看批注凭证",
     "查看往来款凭证",
-    "导出链上流水批注",
     "手动查询链上流水",
     "同步链上流水",
     "链上钱包同步失败",
+    "登录系统",
+    "登录失败",
   ];
 
   const seed = {
@@ -2140,7 +2141,14 @@
   function renderLogs() {
     const tenantLogs = state.auditLogs.filter((log) => log.tenantId === visibleTenantId());
     const defaultActions = currentUser().role === "admin" ? adminLogActions : supervisorLogActions;
-    const actionOptions = [...new Set([...defaultActions, ...tenantLogs.map((log) => log.action).filter(Boolean)])].sort((a, b) => a.localeCompare(b, "zh-CN"));
+    const actionOrder = new Map(defaultActions.map((action, index) => [action, index]));
+    const actionOptions = [...new Set([...defaultActions, ...tenantLogs.map((log) => log.action).filter(Boolean)])]
+      .sort((left, right) => {
+        const leftIndex = actionOrder.has(left) ? actionOrder.get(left) : Number.MAX_SAFE_INTEGER;
+        const rightIndex = actionOrder.has(right) ? actionOrder.get(right) : Number.MAX_SAFE_INTEGER;
+        if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+        return left.localeCompare(right, "zh-CN");
+      });
     const actorIds = [...new Set(tenantLogs.map((log) => log.userId).filter(Boolean))];
     const logs = tenantLogs.filter((log) => {
       if (logFilters.from && new Date(log.createdAt).getTime() < new Date(`${logFilters.from}T00:00:00`).getTime()) return false;
