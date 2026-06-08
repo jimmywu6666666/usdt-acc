@@ -1033,7 +1033,7 @@ function assertWalletEnabledLimit(state, tenantId) {
   if (!limit) return;
   const enabledCount = state.wallets.filter((wallet) => wallet.tenantId === tenantId && wallet.enabled).length;
   if (enabledCount >= limit) {
-    throw badRequest(`启用钱包数量已达上限（${limit} 个），请先停用其他钱包或联系管理员调整限制`);
+    throw badRequest(`启用钱包数量已达上限（${limit} 个），请先停用其他钱包后再操作`);
   }
 }
 
