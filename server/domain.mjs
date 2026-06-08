@@ -1370,8 +1370,8 @@ function receivableStatusLabel(status) {
 function reviewStatusLabel(status) {
   return ({
     pending: "待审核",
-    approved: "已通过",
-    rejected: "已驳回",
+    approved: "已审核",
+    rejected: "未通过",
   })[status] || status || "";
 }
 

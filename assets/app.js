@@ -42,8 +42,8 @@
   };
   const rpReviewMap = {
     pending: ["待审核", "amber"],
-    approved: ["已通过", "green"],
-    rejected: ["已驳回", "red"],
+    approved: ["已审核", "green"],
+    rejected: ["未通过", "red"],
   };
   const rpSettlementStatusMap = {
     pending: ["平账待审核", "amber"],
@@ -1175,7 +1175,7 @@
     return `<form id="receivableFilters" class="filters compact-filters">
       <label>类型<select name="type"><option value="">全部</option><option value="receivable" ${selectedReceivableFilter("type", "receivable")}>应收款</option><option value="payable" ${selectedReceivableFilter("type", "payable")}>应付款</option></select></label>
       <label>平账状态<select name="status"><option value="">全部</option><option value="open" ${selectedReceivableFilter("status", "open")}>未平账</option><option value="partial" ${selectedReceivableFilter("status", "partial")}>部分平账</option><option value="settled" ${selectedReceivableFilter("status", "settled")}>已平账</option><option value="voided" ${selectedReceivableFilter("status", "voided")}>已作废</option></select></label>
-      <label>审核状态<select name="reviewStatus"><option value="">全部</option><option value="pending" ${selectedReceivableFilter("reviewStatus", "pending")}>待审核</option><option value="approved" ${selectedReceivableFilter("reviewStatus", "approved")}>已通过</option><option value="rejected" ${selectedReceivableFilter("reviewStatus", "rejected")}>已驳回</option></select></label>
+      <label>审核状态<select name="reviewStatus"><option value="">全部</option><option value="pending" ${selectedReceivableFilter("reviewStatus", "pending")}>待审核</option><option value="approved" ${selectedReceivableFilter("reviewStatus", "approved")}>已审核</option><option value="rejected" ${selectedReceivableFilter("reviewStatus", "rejected")}>未通过</option></select></label>
       <label>目标方<input name="counterparty" value="${escapeHtml(receivableFilters.counterparty || "")}" placeholder="客户、供应商"></label>
       <label>关键词<input name="keyword" value="${escapeHtml(receivableFilters.keyword || "")}" placeholder="分类、说明、创建人"></label>
       <div class="actions"><button class="btn primary" type="submit">查询</button><button class="btn" type="reset">清空</button></div>
@@ -2527,7 +2527,7 @@
     try {
       await apiMutate(`/api/receivable-payables/${encodeURIComponent(itemId)}/review`, { body: { action, rejectionReason } });
       render();
-      toast(action === "approve" ? "往来款已审核通过" : "往来款已驳回");
+      toast(action === "approve" ? "往来款已审核" : "往来款未通过");
     } catch (error) {
       toast(error.message);
     }
