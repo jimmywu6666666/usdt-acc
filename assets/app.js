@@ -886,7 +886,7 @@
     const pendingSettlements = tenantSettlements().filter((item) => item.status === "pending").length;
     const syncErrors = tenantWallets().filter((wallet) => wallet.enabled && wallet.lastSyncError);
     return `
-      ${pageHead("资金概况", "汇总业务已审核数据、钱包实际流水和链上余额变化")}
+      ${pageHead("资金概况", "汇总业务已审核数据、钱包实际流水、链上余额变化和往来款概况")}
       ${syncErrors.length ? `<div class="notice danger">链上同步异常：${syncErrors.map((wallet) => `${wallet.alias}（${wallet.lastSyncError}）`).join("；")}</div>` : ""}
       <div class="section-label"><h3>业务已审核</h3><span>只统计已审核通过的业务批注</span></div>
       <section class="dashboard-business-block">
