@@ -637,6 +637,13 @@ label {
   font-size: 12px;
 }
 
+.optional-mark {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+}
+
 input,
 select {
   width: 100%;
