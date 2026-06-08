@@ -260,7 +260,7 @@ export function reviewAnnotation(state, { user, annotationId, action, rejectionR
   appendLog(state, {
     tenantId: annotation.tenantId,
     userId: user.id,
-    action: annotation.correctionType === "reversal" ? "审核通过冲正" : annotation.correctionType === "correction" ? "审核通过修正" : "审核通过批注",
+    action: annotation.correctionType === "reversal" ? "审核通过取消入账" : annotation.correctionType === "correction" ? "审核通过修正" : "审核通过批注",
     target: annotation.id,
     createdAt: now,
   });
@@ -287,11 +287,11 @@ export function requestAnnotationReversal(state, { user, annotationId, reason, n
   reconcileState(state);
   const previous = findAnnotation(state, annotationId);
   assertTenantSubscriptionActive(state, previous.tenantId);
-  if (previous.status !== "approved" || previous.correctionType === "reversal") throw badRequest("只有当前已审核批注可以申请冲正");
-  if (user.role === "employee" && previous.annotatedBy !== user.id) throw forbidden("只能冲正自己提交的批注");
+  if (previous.status !== "approved" || previous.correctionType === "reversal") throw badRequest("只有当前已审核批注可以申请取消入账");
+  if (user.role === "employee" && previous.annotatedBy !== user.id) throw forbidden("只能对自己提交的批注申请取消入账");
   if (user.role !== "admin" && previous.tenantId !== user.tenantId) throw forbidden("没有操作该批注的权限");
   const reversalReason = String(reason || "").trim();
-  if (!reversalReason) throw badRequest("请输入冲正原因");
+  if (!reversalReason) throw badRequest("请输入取消入账原因");
   const tx = getVisibleTransaction(state, user, previous.chainTxId);
   ensureNoPendingVersion(state, tx.id);
   const annotation = buildAnnotation(state, {
@@ -299,7 +299,7 @@ export function requestAnnotationReversal(state, { user, annotationId, reason, n
     tx,
     input: {
       category: previous.category,
-      note: `冲正原因：${reversalReason}`,
+      note: `取消入账原因：${reversalReason}`,
       attachment: null,
     },
     now,
@@ -308,7 +308,7 @@ export function requestAnnotationReversal(state, { user, annotationId, reason, n
   });
   annotation.linkedChainTxIds = linkedTransferTransactions(state, tx).map((item) => item.id);
   state.annotations.unshift(annotation);
-  appendLog(state, { tenantId: tx.tenantId, userId: user.id, action: "提交批注冲正", target: annotation.id, createdAt: now });
+  appendLog(state, { tenantId: tx.tenantId, userId: user.id, action: "提交取消入账", target: annotation.id, createdAt: now });
   return annotation;
 }
 
@@ -1793,13 +1793,13 @@ function annotationStatusLabel(annotation) {
       revoked: "平账已撤销",
     }[annotation.status] || annotation.status;
   }
-  if (annotation.correctionType === "reversal" && annotation.status === "approved") return "已冲正";
+  if (annotation.correctionType === "reversal" && annotation.status === "approved") return "已取消入账";
   return {
     pending: "待审核",
     approved: "已审核",
     rejected: "已驳回",
     corrected: "已被修正",
-    reversed: "已被冲正",
+    reversed: "已被取消入账",
     non_business: "非业务流水",
     restored: "已恢复待批注",
     revoked: "已撤销",

@@ -28,8 +28,8 @@
     approved: ["已审核", "green"],
     rejected: ["已驳回", "red"],
     corrected: ["已被修正", "blue"],
-    reversed: ["已被冲正", "gray"],
-    reversal: ["已冲正", "gray"],
+    reversed: ["已被取消入账", "gray"],
+    reversal: ["已取消入账", "gray"],
     non_business: ["非业务流水", "gray"],
     restored: ["已恢复待批注", "orange"],
     settlement_pending: ["平账待审核", "amber"],
@@ -81,11 +81,11 @@
     "提交链上流水批注",
     "修改并重新提交批注",
     "提交批注修正",
-    "提交批注冲正",
+    "提交取消入账",
     "审核通过批注",
     "驳回批注",
     "审核通过修正",
-    "审核通过冲正",
+    "审核通过取消入账",
     "标记非业务流水",
     "恢复非业务流水为待批注",
     "提交应收款",
@@ -1104,7 +1104,7 @@
         <label>开始日期<input type="date" name="from" value="${escapeHtml(entryFilters.from)}"></label>
         <label>结束日期<input type="date" name="to" value="${escapeHtml(entryFilters.to)}"></label>
         <label>方向<select name="direction"><option value="">全部</option><option value="income" ${selectedFilter("direction", "income")}>进账</option><option value="expense" ${selectedFilter("direction", "expense")}>出账</option><option value="transfer" ${selectedFilter("direction", "transfer")}>内部划转</option></select></label>
-        <label>批注状态<select name="status"><option value="">全部</option><option value="unannotated" ${selectedFilter("status", "unannotated")}>待批注</option><option value="non_business" ${selectedFilter("status", "non_business")}>非业务流水</option><option value="transfer_pending" ${selectedFilter("status", "transfer_pending")}>内部划转待确认</option><option value="historical" ${selectedFilter("status", "historical")}>历史无需批注</option><option value="pending" ${selectedFilter("status", "pending")}>待审核</option><option value="settlement_pending" ${selectedFilter("status", "settlement_pending")}>平账待审核</option><option value="approved" ${selectedFilter("status", "approved")}>已审核</option><option value="settlement_approved" ${selectedFilter("status", "settlement_approved")}>平账已审核</option><option value="rejected" ${selectedFilter("status", "rejected")}>已驳回</option><option value="settlement_rejected" ${selectedFilter("status", "settlement_rejected")}>平账已驳回</option><option value="reversal" ${selectedFilter("status", "reversal")}>已冲正</option><option value="settlement_revoked" ${selectedFilter("status", "settlement_revoked")}>平账已撤销</option></select></label>
+        <label>批注状态<select name="status"><option value="">全部</option><option value="unannotated" ${selectedFilter("status", "unannotated")}>待批注</option><option value="non_business" ${selectedFilter("status", "non_business")}>非业务流水</option><option value="transfer_pending" ${selectedFilter("status", "transfer_pending")}>内部划转待确认</option><option value="historical" ${selectedFilter("status", "historical")}>历史无需批注</option><option value="pending" ${selectedFilter("status", "pending")}>待审核</option><option value="settlement_pending" ${selectedFilter("status", "settlement_pending")}>平账待审核</option><option value="approved" ${selectedFilter("status", "approved")}>已审核</option><option value="settlement_approved" ${selectedFilter("status", "settlement_approved")}>平账已审核</option><option value="rejected" ${selectedFilter("status", "rejected")}>已驳回</option><option value="settlement_rejected" ${selectedFilter("status", "settlement_rejected")}>平账已驳回</option><option value="reversal" ${selectedFilter("status", "reversal")}>已取消入账</option><option value="settlement_revoked" ${selectedFilter("status", "settlement_revoked")}>平账已撤销</option></select></label>
         <label>钱包<select name="walletId"><option value="">全部</option>${tenantWallets().map((wallet) => `<option value="${wallet.id}" ${selectedFilter("walletId", wallet.id)}>${wallet.alias}</option>`).join("")}</select></label>
         <label>最小金额<input type="number" name="minAmount" step="0.01" value="${escapeHtml(entryFilters.minAmount)}"></label>
         <label>最大金额<input type="number" name="maxAmount" step="0.01" value="${escapeHtml(entryFilters.maxAmount)}"></label>
@@ -1222,7 +1222,7 @@
     if (businessActive && annotation?.settlementId && annotation.status === "approved" && canManageNonBusiness()) actions.push(`<button class="btn danger" data-rps-revoke="${annotation.settlementId}">撤销平账</button>`);
     if (businessActive && annotation?.status === "approved" && !annotation.settlementId && annotation.correctionType !== "reversal" && canEditAnnotation(annotation)) {
       actions.push(`<button class="btn warn" data-correct="${annotation.id}">修正</button>`);
-      actions.push(`<button class="btn danger" data-reverse="${annotation.id}">冲正</button>`);
+      actions.push(`<button class="btn danger" data-reverse="${annotation.id}">取消入账</button>`);
     }
     return actions.join("");
   }
@@ -1299,7 +1299,7 @@
     return `<div class="review-cards">${rows.map((annotation) => {
       const tx = state.chainTransactions.find((item) => item.id === annotation.chainTxId);
       const direction = transactionDirection(tx);
-      const reviewKind = annotation.correctionType === "correction" ? "修正审核" : annotation.correctionType === "reversal" ? "冲正审核" : "批注审核";
+      const reviewKind = annotation.correctionType === "correction" ? "修正审核" : annotation.correctionType === "reversal" ? "取消入账审核" : "批注审核";
       return `<article class="review-card review-card-annotation review-${direction} ${annotation.correctionType ? `review-${annotation.correctionType}` : ""}">
         <div class="review-card-head"><strong><span class="review-kind review-kind-annotation">${reviewKind}</span>${directionPill(direction)} <span class="amount-${direction}">${money(tx.amount)} USDT</span></strong><span class="review-status-group">${badge(statusMap, "pending")}</span></div>
         <dl>
@@ -1310,7 +1310,7 @@
           <div><dt>业务说明</dt><dd>${annotation.category} · ${annotation.note}</dd></div>
           ${annotation.rejectionReason ? `<div class="wide"><dt>驳回原因</dt><dd><div class="inline-alert danger">${escapeHtml(annotation.rejectionReason)}</div></dd></div>` : ""}
           <div><dt>凭证</dt><dd>${annotation.attachmentName ? `<button class="attachment-link" data-attachment="${annotation.id}">${annotation.attachmentName}</button>` : "无凭证"}</dd></div>
-          <div><dt>版本</dt><dd>第 ${annotation.version} 版${annotation.correctionType === "correction" ? "（修正）" : annotation.correctionType === "reversal" ? "（冲正）" : ""}</dd></div>
+          <div><dt>版本</dt><dd>第 ${annotation.version} 版${annotation.correctionType === "correction" ? "（修正）" : annotation.correctionType === "reversal" ? "（取消入账）" : ""}</dd></div>
         </dl>
         <div class="actions">${showReviewActions ? `<button class="btn success" data-review-approve="${annotation.id}">审核通过</button><button class="btn danger" data-review-reject="${annotation.id}">驳回</button>` : ""}<button class="btn" data-detail="${tx.id}">历史</button></div>
       </article>`;
@@ -2383,7 +2383,7 @@
           "已审核表示主管审核通过，计入业务统计；平账已审核也会计入业务统计。",
           "已驳回表示主管退回，员工可以修改后重新提交。",
           "已被修正表示已有新的修正版本通过，原版本保留但不再作为当前有效版本。",
-          "已被冲正表示该流水保留历史，但不再计入业务收支。",
+          "已被取消入账表示该流水保留历史，但不再计入业务收支。",
           "非业务流水表示主管确认该笔不是业务收支，例如测试款或系统上线验证款。",
           "历史无需批注表示早于钱包纳入管理时间的历史流水，默认不要求补批注。",
           "内部划转待确认表示只同步到了内部划转的一侧，等另一侧钱包流水同步后再处理。",
@@ -2402,9 +2402,9 @@
           "审核时需要确认业务原由是否清楚、分类是否正确、凭证是否能证明该笔收付款，以及链上金额、方向、钱包是否与实际业务一致。",
           "审核通过后，该批注成为当前有效记录，并进入业务统计。",
           "驳回时必须填写原因，员工修改后可重新提交。",
-          "已审核记录需要调整时，主管可发起修正或冲正。",
+          "已审核记录需要调整时，主管可发起修正或取消入账。",
           "修正用于分类、说明、凭证等内容需要调整的情况；修正通过后新版本生效。",
-          "冲正用于该笔不应继续计入业务收支或需要重新处理的情况；冲正通过后链上流水恢复为待处理，可重新批注、重新平账或标记非业务。",
+          "取消入账用于该笔不应继续计入业务收支或需要重新处理的情况；取消入账通过后链上流水恢复为待处理，可重新批注、重新平账或标记非业务。",
         ])}
         ${helpSection("六、往来款管理", [
           "往来款管理用于记录和查看应收款、应付款。",
@@ -2413,7 +2413,7 @@
           "提交往来款时可上传或粘贴凭证图片，方便主管审核业务来源和金额依据。",
           "平账从流水账目发起：先找到实际收款或付款的链上流水，再选择对应的应收款或应付款。",
           "进账流水只能平应收款，出账流水只能平应付款。",
-          "链上流水用于平账前必须没有当前有效批注；已经普通批注的流水需要先冲正恢复待处理后，才能重新平账。",
+          "链上流水用于平账前必须没有当前有效批注；已经普通批注的流水需要先取消入账恢复待处理后，才能重新平账。",
           "纳入管理时间之前的历史无需批注流水不能用于平账。",
           "一笔链上流水只能绑定一笔往来款，且必须整笔用于平账，不能拆分或部分平账。",
           "一笔往来款可以通过多笔链上流水分多次平账。",
@@ -2467,7 +2467,7 @@
           "链上查询只是查询工具，不等同于批注、平账或审核。",
         ])}
         ${helpSection("十二、操作日志", [
-          "操作日志用于追踪系统内的重要业务和管理操作，包括提交批注、审核通过或驳回、修正、冲正、往来款提交、审核、平账、钱包变更、权限变更、续费处理和工单处理等。",
+          "操作日志用于追踪系统内的重要业务和管理操作，包括提交批注、审核通过或驳回、修正、取消入账、往来款提交、审核、平账、钱包变更、权限变更、续费处理和工单处理等。",
           "主管可查看本系统业务相关日志，主要用于追踪提交、审核、调整、钱包、权限和续费处理。",
           "员工只能查看与自己相关的日志。",
         ])}
@@ -2478,7 +2478,7 @@
           "主管审核时不要只看金额，应结合业务说明和凭证确认。",
           "发现链上流水和业务说明不一致时，优先驳回让员工补充或修改。",
           "应收应付尽量及时录入，避免平账时忘记业务来源。",
-          "已审核记录需要调整时，使用修正或冲正，不要覆盖历史。",
+          "已审核记录需要调整时，使用修正或取消入账，不要覆盖历史。",
           "遇到续费、同步、账号或系统异常时，主管优先通过工单中心提交，方便保留处理记录。",
         ])}
       </section>
@@ -3109,22 +3109,22 @@
     const tx = state.chainTransactions.find((item) => item.id === annotation?.chainTxId);
     if (!annotation || !tx) return;
     const overlay = createFormModal({
-      title: "提交批注冲正",
-      desc: "冲正审核通过后，该流水不再计入业务收支统计。",
+      title: "提交取消入账",
+      desc: "取消入账审核通过后，该流水不再计入业务收支统计。",
       body: `
         ${renderAnnotationTxSummary(tx)}
-        <label>冲正原因
-          <textarea name="reason" required placeholder="说明为什么需要冲正"></textarea>
+        <label>取消入账原因
+          <textarea name="reason" required placeholder="说明为什么需要取消入账"></textarea>
         </label>
       `,
-      submitText: "提交冲正",
+      submitText: "提交取消入账",
       danger: true,
-      confirmMessage: "确认提交这条冲正申请？",
+      confirmMessage: "确认提交这条取消入账申请？",
       onSubmit: async (formData, close) => {
         await apiMutate(`/api/annotations/${encodeURIComponent(annotationId)}/reverse`, { body: { reason: formData.get("reason") } });
         close();
         render();
-        toast("冲正申请已提交审核");
+        toast("取消入账申请已提交审核");
       },
     });
     document.body.append(overlay);
