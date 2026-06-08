@@ -25,6 +25,8 @@ import {
   requestAnnotationReversal,
   restoreNonBusinessTransaction,
   resubmitAnnotation,
+  resetUserPassword,
+  resetUserTotp,
   reviewAnnotation,
   reviewReceivablePayable,
   reviewReceivableSettlement,
@@ -396,6 +398,28 @@ test("supervisor manages wallets, employees and visibility permissions", () => {
     user: user(state, "sup"),
     input: { name: "重复账号", loginName: "emp_c", password: "secret123" },
   }), /登录账号已存在/);
+});
+
+test("admin and supervisor reset account password and login key within permission scope", () => {
+  const state = ledgerState({
+    tenants: [
+      { id: "tenant_alpha", name: "Alpha", enabled: true, subscriptionExpiresAt: "2026-12-31T00:00:00.000Z", subscriptionStatus: "active" },
+      { id: "tenant_beta", name: "Beta", enabled: true, subscriptionExpiresAt: "2026-12-31T00:00:00.000Z", subscriptionStatus: "active" },
+    ],
+    users: [
+      { id: "admin", tenantId: null, name: "管理员", role: "admin", canViewAll: true },
+      { id: "sup", tenantId: "tenant_alpha", name: "Alpha主管", role: "supervisor", canViewAll: true },
+      { id: "emp", tenantId: "tenant_alpha", name: "Alpha员工", role: "employee", canViewAll: true },
+      { id: "beta_emp", tenantId: "tenant_beta", name: "Beta员工", role: "employee", canViewAll: true },
+    ],
+  });
+  resetUserPassword(state, { user: user(state, "admin"), userId: "beta_emp", password: "newpass123" });
+  assert.equal(verifyPassword(user(state, "beta_emp"), "newpass123", { allowDemoPassword: false }), true);
+  const reset = resetUserTotp(state, { user: user(state, "admin"), userId: "admin" });
+  assert.ok(reset.totpSecret);
+  updateEmployeePermission(state, { user: user(state, "admin"), employeeId: "beta_emp", canViewAll: false });
+  assert.equal(user(state, "beta_emp").canViewAll, false);
+  assert.throws(() => resetUserPassword(state, { user: user(state, "sup"), userId: "beta_emp", password: "newpass123" }), /没有操作该账号的权限|当前账号没有主管权限/);
 });
 
 test("admin wallet enabled limit blocks new and re-enabled wallets", () => {

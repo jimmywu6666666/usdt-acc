@@ -711,7 +711,7 @@ export function createEmployee(state, { user, input, now = new Date().toISOStrin
 export function updateEmployeePermission(state, { user, employeeId, canViewAll, now = new Date().toISOString() }) {
   const employee = state.users.find((item) => item.id === employeeId);
   if (!employee) throw notFound("员工账号不存在");
-  assertSupervisor(state, user.id, employee.tenantId);
+  if (user.role !== "admin") assertSupervisor(state, user.id, employee.tenantId);
   if (employee.role !== "employee") throw badRequest("只能修改员工账号权限");
   employee.canViewAll = canViewAll === true;
   appendLog(state, { tenantId: employee.tenantId, userId: user.id, action: "修改员工查看权限", target: employee.id, createdAt: now });
@@ -763,9 +763,7 @@ export function updateTenantStatus(state, { user, tenantId, enabled, now = new D
 export function resetUserTotp(state, { user, userId, now = new Date().toISOString() }) {
   const target = state.users.find((item) => item.id === userId);
   if (!target) throw notFound("账号不存在");
-  if (user.role === "admin") {
-    // Admin can reset any account.
-  } else {
+  if (user.role !== "admin") {
     assertSupervisor(state, user.id, target.tenantId);
     if (target.tenantId !== user.tenantId) throw forbidden("没有操作该账号的权限");
   }
@@ -774,6 +772,26 @@ export function resetUserTotp(state, { user, userId, now = new Date().toISOStrin
     tenantId: target.tenantId || null,
     userId: user.id,
     action: "重置登录密钥",
+    target: target.name,
+    createdAt: now,
+  });
+  return target;
+}
+
+export function resetUserPassword(state, { user, userId, password, now = new Date().toISOString() }) {
+  const target = state.users.find((item) => item.id === userId);
+  if (!target) throw notFound("账号不存在");
+  if (user.role !== "admin") {
+    assertSupervisor(state, user.id, target.tenantId);
+    if (target.tenantId !== user.tenantId) throw forbidden("没有操作该账号的权限");
+  }
+  const newPassword = String(password || "");
+  if (newPassword.length < 6) throw badRequest("新密码至少 6 位");
+  target.passwordHash = hashPassword(newPassword);
+  appendLog(state, {
+    tenantId: target.tenantId || null,
+    userId: user.id,
+    action: "重置登录密码",
     target: target.name,
     createdAt: now,
   });

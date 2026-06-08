@@ -33,6 +33,7 @@ import {
   requestAnnotationReversal,
   restoreNonBusinessTransaction,
   resubmitAnnotation,
+  resetUserPassword,
   resetUserTotp,
   reviewAnnotation,
   reviewReceivablePayable,
@@ -565,6 +566,18 @@ async function handleApi(req, res, pathname) {
       return current;
     });
     respond(200, { ok: true, state, totpSetup: totpSetupForUser(targetUser) });
+    return;
+  }
+
+  const resetPassword = pathname.match(/^\/api\/users\/([^/]+)\/password$/);
+  if (resetPassword && req.method === "PATCH") {
+    const body = await readJsonBody(req);
+    const state = await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      resetUserPassword(current, { user, userId: resetPassword[1], password: body.password });
+      return current;
+    });
+    respond(200, { ok: true, state });
     return;
   }
 

@@ -69,6 +69,7 @@
     "创建员工账号",
     "创建主管账号",
     "重置登录密钥",
+    "重置登录密码",
     "修改员工查看权限",
     "提交租用续费哈希",
     "提交应收款",
@@ -747,7 +748,7 @@
       ["logs", "操作日志"],
     ];
     if (["admin", "supervisor"].includes(role)) nav.splice(2, 0, ["review", "审核中心"]);
-    if (role === "supervisor") nav.splice(-1, 0, ["users", "账号管理"]);
+    if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["users", "账号管理"]);
     if (role === "admin") nav.splice(-1, 0, ["admin", "系统管理"]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["subscription", role === "admin" ? "租用管理" : "租用续费"]);
     if (role === "admin") nav.splice(-1, 0, ["server", "服务器管理"]);
@@ -758,7 +759,7 @@
   function renderView() {
     const role = currentUser().role;
     if (state.activeView === "review" && !["admin", "supervisor"].includes(role)) state.activeView = "dashboard";
-    if (state.activeView === "users" && role !== "supervisor") state.activeView = "dashboard";
+    if (state.activeView === "users" && !["admin", "supervisor"].includes(role)) state.activeView = "dashboard";
     if (state.activeView === "admin" && role !== "admin") state.activeView = "dashboard";
     if (state.activeView === "server" && role !== "admin") state.activeView = "dashboard";
     if (state.activeView === "subscription" && !["admin", "supervisor"].includes(role)) state.activeView = "dashboard";
@@ -1476,10 +1477,14 @@
   }
 
   function renderUsers() {
-    const canManage = currentUser().role === "supervisor";
+    const role = currentUser().role;
+    const canCreate = role === "supervisor";
+    const desc = role === "admin"
+      ? "管理员可维护自己的账号，也可帮助租户账号重置密码或登录密钥"
+      : "主管可创建员工或主管账号，并设置员工是否可查看全部账目";
     return `
-      ${pageHead("账号管理", "主管可创建员工或主管账号，并设置员工是否可查看全部账目")}
-      ${canManage ? `<section class="user-management-layout">
+      ${pageHead("账号管理", desc)}
+      ${canCreate ? `<section class="user-management-layout">
         <div class="panel user-create-panel"><div class="panel-title"><h3>新增账号</h3></div>
           <form id="userForm" class="form-grid one compact-form">
             <label>姓名<input name="name" required></label>
@@ -1495,9 +1500,30 @@
   }
 
   function renderUserTable() {
+    const isAdmin = currentUser().role === "admin";
+    const users = isAdmin ? state.users : tenantUsers();
+    const tenantColumn = isAdmin ? "<th>所属系统</th>" : "";
+    const rows = users.map((user) => {
+      const canEditPermission = user.role === "employee" && (isAdmin || currentUser().role === "supervisor");
+      const operations = `
+        <td><div class="row-actions">
+          ${canEditPermission ? `<label class="checkline compact"><input type="checkbox" data-user-view-all="${user.id}" ${user.canViewAll ? "checked" : ""}> 允许查看全部</label>` : ""}
+          <button class="btn small" data-reset-password="${user.id}">重置密码</button>
+          <button class="btn small" data-reset-totp="${user.id}">重置登录密钥</button>
+        </div></td>`;
+      return `<tr>
+        <td>${escapeHtml(user.name)}</td>
+        <td>${escapeHtml(user.loginName || user.id || "-")}</td>
+        ${isAdmin ? `<td>${escapeHtml(user.tenantId ? tenantName(user.tenantId) : "平台")}</td>` : ""}
+        <td>${roleLabel(user.role)}</td>
+        <td>${user.totpEnabled ? "已绑定" : "未绑定"}</td>
+        <td>${user.role === "employee" ? (user.canViewAll ? "是" : "否") : "-"}</td>
+        ${operations}
+      </tr>`;
+    }).join("");
     return `<div class="panel-title"><h3>账号列表</h3></div><div class="table-wrap user-table-wrap"><table class="user-table">
-      <thead><tr><th>姓名</th><th>登录账号</th><th>角色</th><th>登录密钥</th><th>查看全部账目</th>${canReview() ? "<th>操作</th>" : ""}</tr></thead>
-      <tbody>${tenantUsers().map((user) => `<tr><td>${escapeHtml(user.name)}</td><td>${escapeHtml(user.loginName || user.id || "-")}</td><td>${roleLabel(user.role)}</td><td>${user.totpEnabled ? "已绑定" : "未绑定"}</td><td>${user.canViewAll ? "是" : "否"}</td>${canReview() ? `<td><div class="row-actions">${user.role === "employee" ? `<label class="checkline compact"><input type="checkbox" data-user-view-all="${user.id}" ${user.canViewAll ? "checked" : ""}> 允许查看全部</label>` : ""}<button class="btn small" data-reset-totp="${user.id}">重置登录密钥</button></div></td>` : ""}</tr>`).join("")}</tbody>
+      <thead><tr><th>姓名</th><th>登录账号</th>${tenantColumn}<th>角色</th><th>登录密钥</th><th>查看全部账目</th><th>操作</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="${isAdmin ? 7 : 6}" class="empty">暂无账号</td></tr>`}</tbody>
     </table></div>`;
   }
 
@@ -1939,9 +1965,11 @@
           "纳入管理起始时间创建后不可修改，避免历史流水统计口径发生变化。",
         ])}
         ${helpSection("八、账号管理", [
+          "管理员可以维护自己的账号，也可以帮助各系统账号重置登录密码或登录密钥。",
           "主管可以创建员工或主管账号，并设置员工是否允许查看全部账目。",
           "新增账号时需要填写姓名、登录账号和初始密码；正式登录页使用账号和密码登录，不再选择角色。",
           "新增账号后系统会显示登录密钥和扫码链接，请交给对应人员保存到验证器；重置登录密钥后旧验证码会立即失效。",
+          "重置登录密码后旧密码立即失效；重置登录密钥后旧动态验证码立即失效，需要重新绑定验证器。",
           "主管账号默认可以查看和审核本系统数据，不显示员工查看范围开关。",
           "勾选查看全部账目时，员工可以查看本系统全部账目。",
           "取消勾选时，员工只能查看自己提交或需要自己处理的记录。",
@@ -2222,6 +2250,7 @@
     document.querySelectorAll("[data-tenant-manual-renew]").forEach((button) => button.addEventListener("click", () => manualRenewTenant(button.dataset.tenantManualRenew)));
     document.querySelector("#categoryForm")?.addEventListener("submit", submitCategory);
     document.querySelectorAll("[data-reset-totp]").forEach((button) => button.addEventListener("click", () => resetTotp(button.dataset.resetTotp)));
+    document.querySelectorAll("[data-reset-password]").forEach((button) => button.addEventListener("click", () => resetPassword(button.dataset.resetPassword)));
     document.querySelectorAll("[data-edit-category]").forEach((button) => button.addEventListener("click", () => {
       renameCategory(button.dataset.editCategory, button.dataset.categoryName);
     }));
@@ -2749,6 +2778,31 @@
     } catch (error) {
       toast(error.message);
     }
+  }
+
+  function resetPassword(userId) {
+    const target = state.users.find((item) => item.id === userId);
+    if (!target) return;
+    const overlay = createFormModal({
+      title: "重置登录密码",
+      desc: `为「${target.name}」设置新的登录密码，保存后旧密码立即失效。`,
+      body: `
+        <label>新密码<input name="password" type="password" autocomplete="new-password" minlength="6" required placeholder="至少 6 位"></label>
+        <label>确认新密码<input name="passwordConfirm" type="password" autocomplete="new-password" minlength="6" required placeholder="再次输入新密码"></label>
+      `,
+      submitText: "确认重置",
+      danger: true,
+      onSubmit: async (formData, close) => {
+        const password = String(formData.get("password") || "");
+        const passwordConfirm = String(formData.get("passwordConfirm") || "");
+        if (password !== passwordConfirm) throw new Error("两次输入的新密码不一致");
+        await apiMutate(`/api/users/${encodeURIComponent(userId)}/password`, { method: "PATCH", body: { password } });
+        render();
+        toast("登录密码已重置");
+        close();
+      },
+    });
+    document.body.append(overlay);
   }
 
   function showTotpSetup(setup) {
