@@ -745,18 +745,20 @@
         </div>
       </section>
       <div class="section-label"><h3>钱包实际流水</h3><span>按链上流水统计，不区分是否已批注或审核</span></div>
-      <section class="grid stats">
-        ${periods.map((period) => {
-          const summary = summarizeActual(actual, period.start, period.end);
-          return `<div class="card period-card">
-            <div class="card-label">${period.label}</div>
-            <div class="period-values">
-              <div><span>进账</span><strong class="income-value">${money(summary.income)}</strong></div>
-              <div><span>出账</span><strong class="expense-value">${money(summary.expense)}</strong></div>
-            </div>
-            <div class="card-foot">USDT</div>
-          </div>`;
-        }).join("")}
+      <section class="dashboard-business-block">
+        <div class="grid stats">
+          ${periods.map((period) => {
+            const summary = summarizeActual(actual, period.start, period.end);
+            return `<div class="period-card">
+              <div class="card-label">${period.label}</div>
+              <div class="period-values">
+                <div><span>进账</span><strong class="income-value">${money(summary.income)}</strong></div>
+                <div><span>出账</span><strong class="expense-value">${money(summary.expense)}</strong></div>
+              </div>
+              <div class="card-foot">USDT</div>
+            </div>`;
+          }).join("")}
+        </div>
       </section>
       <div class="section-label"><h3>往来款概况</h3><span>只统计已审核且未作废的往来款</span></div>
       <section class="dashboard-business-block rp-overview">
@@ -777,9 +779,15 @@
           ${renderRpStat("应付总额", receivableSummary.payable.amount, "应付已付", receivableSummary.payable.settled, "未付", receivableSummary.payable.remaining, "多付", receivableSummary.payable.over, "payable")}
         </div>
       </section>
-      <section class="grid two-col" style="margin-top:14px">
-        <div class="panel"><div class="panel-title"><h3>链上钱包余额</h3></div>${renderWalletBalanceTable()}</div>
-        <div class="panel"><div class="panel-title"><h3>最近流水</h3><button class="btn" data-nav="entries">查看全部</button></div>${renderTransactionTable(rows.slice(0, 6), false)}</div>
+      <section class="grid dashboard-table-grid">
+        <div class="dashboard-business-block dashboard-table-block">
+          <div class="panel-title"><h3>链上钱包余额</h3></div>
+          ${renderWalletBalanceTable()}
+        </div>
+        <div class="dashboard-business-block dashboard-table-block">
+          <div class="panel-title"><h3>最近流水</h3><button class="btn" data-nav="entries">查看全部</button></div>
+          ${renderTransactionTable(rows.slice(0, 6), false)}
+        </div>
       </section>
     `;
   }
