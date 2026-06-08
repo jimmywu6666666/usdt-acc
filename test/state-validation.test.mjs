@@ -28,6 +28,7 @@ import {
   updateCategory,
   updateEmployeePermission,
   updateSubscriptionSettings,
+  updateSystemSettings,
   updateTenantStatus,
   updateWalletManagedFrom,
   validateState,
@@ -354,6 +355,31 @@ test("supervisor manages wallets, employees and visibility permissions", () => {
   enableWallet(state, { user: user(state, "sup"), walletId: "wallet" });
   assert.equal(state.wallets.find((item) => item.id === "wallet").enabled, true);
   assert.equal(user(state, "emp").canViewAll, false);
+});
+
+test("admin wallet enabled limit blocks new and re-enabled wallets", () => {
+  const state = ledgerState();
+  updateSystemSettings(state, {
+    user: user(state, "admin"),
+    input: { walletEnabledLimit: 1 },
+  });
+  assert.equal(state.systemSettings.walletEnabledLimit, 1);
+  assert.throws(() => createWallet(state, {
+    user: user(state, "sup"),
+    input: { alias: "新钱包", chain: "TRC20", address: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t" },
+  }), /启用钱包数量已达上限/);
+  disableWallet(state, { user: user(state, "sup"), walletId: "wallet" });
+  state.wallets.push({
+    id: "wallet_disabled",
+    tenantId: "tenant_alpha",
+    alias: "停用钱包",
+    chain: "TRC20",
+    address: "TJRabPrwbZy45sbavfcjinPJC18kjpRTTw",
+    enabled: false,
+    managedFrom: "2026-06-01T00:00:00.000Z",
+  });
+  enableWallet(state, { user: user(state, "sup"), walletId: "wallet" });
+  assert.throws(() => enableWallet(state, { user: user(state, "sup"), walletId: "wallet_disabled" }), /启用钱包数量已达上限/);
 });
 
 test("wallet management start time controls whether employees must annotate history", () => {

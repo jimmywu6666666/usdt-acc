@@ -36,6 +36,8 @@ export function migrateAnnotationState(state) {
   state.subscriptionSettings.platformWalletAddress ||= "";
   state.subscriptionSettings.enabled = state.subscriptionSettings.enabled === true;
   state.subscriptionSettings.autoDisable = state.subscriptionSettings.autoDisable !== false;
+  state.systemSettings ||= {};
+  state.systemSettings.walletEnabledLimit = nonNegativeIntegerOrDefault(state.systemSettings.walletEnabledLimit, 0);
 
   for (const tx of state.chainTransactions) {
     delete tx.matchedEntryId;
@@ -403,6 +405,7 @@ export function createWallet(state, { user, input, now = new Date().toISOString(
   if (chain !== "TRC20") throw badRequest("第一版只支持 TRC20");
   if (!isValidTronAddress(address)) throw badRequest("TRC20 钱包地址格式或校验码不正确");
   if (state.wallets.some((item) => item.tenantId === user.tenantId && item.address === address)) throw badRequest("本系统已存在该钱包地址");
+  assertWalletEnabledLimit(state, user.tenantId);
   const managedFrom = parseManagedFrom(input.managedFrom, now);
   const wallet = { id: id("wallet"), tenantId: user.tenantId, alias, chain, address, enabled: true, managedFrom, createdAt: now };
   state.wallets.unshift(wallet);
@@ -432,6 +435,7 @@ export function enableWallet(state, { user, walletId, now = new Date().toISOStri
   const wallet = state.wallets.find((item) => item.id === walletId);
   if (!wallet) throw notFound("钱包不存在");
   assertSupervisor(state, user.id, wallet.tenantId);
+  if (!wallet.enabled) assertWalletEnabledLimit(state, wallet.tenantId);
   wallet.enabled = true;
   wallet.enabledAt = now;
   wallet.enabledBy = user.id;
@@ -511,6 +515,26 @@ export function updateSubscriptionSettings(state, { user, input, now = new Date(
     createdAt: now,
   });
   return state.subscriptionSettings;
+}
+
+export function updateSystemSettings(state, { user, input, now = new Date().toISOString() }) {
+  reconcileState(state);
+  assertAdmin(user);
+  const walletEnabledLimit = Number(input.walletEnabledLimit);
+  if (!Number.isInteger(walletEnabledLimit) || walletEnabledLimit < 0) throw badRequest("钱包启用数限制必须是 0 或正整数");
+  state.systemSettings = {
+    ...(state.systemSettings || {}),
+    walletEnabledLimit,
+    updatedAt: now,
+  };
+  appendLog(state, {
+    tenantId: null,
+    userId: user.id,
+    action: "修改系统钱包限制",
+    target: walletEnabledLimit > 0 ? `每个系统最多启用 ${walletEnabledLimit} 个钱包` : "不限制启用钱包数量",
+    createdAt: now,
+  });
+  return state.systemSettings;
 }
 
 export function submitSubscriptionHash(state, {
@@ -997,6 +1021,20 @@ function normalizeLegacyStatus(status) {
 function positiveNumberOrDefault(value, fallback) {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric > 0 ? numeric : fallback;
+}
+
+function nonNegativeIntegerOrDefault(value, fallback) {
+  const numeric = Number(value);
+  return Number.isInteger(numeric) && numeric >= 0 ? numeric : fallback;
+}
+
+function assertWalletEnabledLimit(state, tenantId) {
+  const limit = nonNegativeIntegerOrDefault(state.systemSettings?.walletEnabledLimit, 0);
+  if (!limit) return;
+  const enabledCount = state.wallets.filter((wallet) => wallet.tenantId === tenantId && wallet.enabled).length;
+  if (enabledCount >= limit) {
+    throw badRequest(`启用钱包数量已达上限（${limit} 个），请先停用其他钱包或联系管理员调整限制`);
+  }
 }
 
 function subscriptionMonths(amount, monthlyFee) {

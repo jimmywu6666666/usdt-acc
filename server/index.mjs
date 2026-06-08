@@ -32,6 +32,7 @@ import {
   searchChainTransactions,
   submitSubscriptionHash,
   updateSubscriptionSettings,
+  updateSystemSettings,
   updateCategory,
   updateEmployeePermission,
   updateTenantStatus,
@@ -258,6 +259,17 @@ async function handleApi(req, res, pathname) {
     const state = await storage.mutateState(async (current) => {
       const { user } = await authenticate(current);
       updateSubscriptionSettings(current, { user, input: body });
+      return current;
+    });
+    respond(200, { ok: true, state });
+    return;
+  }
+
+  if (pathname === "/api/system/settings" && req.method === "PATCH") {
+    const body = await readJsonBody(req);
+    const state = await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      updateSystemSettings(current, { user, input: body });
       return current;
     });
     respond(200, { ok: true, state });

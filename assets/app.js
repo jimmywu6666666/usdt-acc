@@ -59,6 +59,7 @@
     "线下手工租用续费",
     "租户续费自动启用",
     "租用到期自动停用",
+    "修改系统钱包限制",
     "新增全局分类",
     "修改全局分类",
     "登录系统",
@@ -126,6 +127,9 @@
       platformWalletAddress: "",
       enabled: false,
       autoDisable: true,
+    },
+    systemSettings: {
+      walletEnabledLimit: 0,
     },
     auditLogs: [
       { id: "log_001", tenantId: "tenant_alpha", userId: "user_emp_a", action: "提交链上流水批注", target: "annotation_001", createdAt: "2026-06-05T10:16:00.000Z" },
@@ -886,13 +890,15 @@
   function renderWallets() {
     const walletList = `<div class="panel wallet-list-panel"><div class="panel-title"><h3>钱包列表</h3></div>${renderWalletBalanceTable()}</div>`;
     const statusNotice = renderChainStatusNotice();
+    const limitNotice = renderWalletLimitNotice();
     const syncAction = canViewReviewCenter() ? `<button class="btn primary" data-action="sync-chain">立即同步</button>` : "";
     if (!canReview()) {
-      return `${pageHead("钱包管理", "查看本系统钱包、链上余额和同步状态，历史流水会永久保留", syncAction)}${statusNotice}${walletList}`;
+      return `${pageHead("钱包管理", "查看本系统钱包、链上余额和同步状态，历史流水会永久保留", syncAction)}${statusNotice}${limitNotice}${walletList}`;
     }
     return `
       ${pageHead("钱包管理", "维护本系统钱包、链上余额和同步状态，停用钱包不会影响历史流水", syncAction)}
       ${statusNotice}
+      ${limitNotice}
       <section class="grid two-col">
         <div class="panel wallet-create-panel">
           <div class="panel-title"><h3>新增钱包</h3></div>
@@ -916,6 +922,14 @@
         ${walletList}
       </section>
     `;
+  }
+
+  function renderWalletLimitNotice() {
+    const limit = Number(state.systemSettings?.walletEnabledLimit || 0);
+    if (!limit) return "";
+    const enabledCount = tenantWallets().filter((wallet) => wallet.enabled).length;
+    const limitReached = enabledCount >= limit;
+    return `<div class="notice ${limitReached ? "chain-status-off" : "chain-status-ok"}">钱包启用限制：当前已启用 ${enabledCount} / ${limit} 个。${limitReached ? "已达到上限，不能新增或启用钱包。" : "未达到上限。"}</div>`;
   }
 
   function renderChain() {
@@ -1117,9 +1131,21 @@
         <div class="panel"><div class="panel-title"><h3>开通独立系统</h3></div>
           <form id="tenantForm" class="form-grid one"><label>系统名称<input name="name" required></label><label>首位主管<input name="supervisorName" required></label><div class="actions"><button class="btn primary" type="submit">开通系统</button></div></form>
         </div>
-        <div class="panel"><div class="panel-title"><h3>新增统一分类</h3></div>
-          <form id="categoryForm" class="form-grid one"><label>收支类型<select name="type"><option value="income">进账</option><option value="expense">出账</option></select></label><label>分类名称<input name="name" required></label><div class="actions"><button class="btn primary" type="submit">新增分类</button></div></form>
+        <div class="panel"><div class="panel-title"><h3>钱包启用限制</h3><span>按每个系统单独计算</span></div>
+          <form id="systemSettingsForm" class="form-grid one">
+            <label>每个系统最多启用钱包数<input name="walletEnabledLimit" type="number" min="0" step="1" value="${escapeHtml(state.systemSettings?.walletEnabledLimit ?? 0)}" required></label>
+            <p class="form-hint">填 0 表示不限制；达到限制后，主管不能新增启用钱包，也不能把停用钱包重新启用。</p>
+            <div class="actions"><button class="btn primary" type="submit">保存限制</button></div>
+          </form>
         </div>
+      </section>
+      <section class="panel">
+        <div class="panel-title"><h3>新增统一分类</h3></div>
+        <form id="categoryForm" class="form-grid">
+          <label>收支类型<select name="type"><option value="income">进账</option><option value="expense">出账</option></select></label>
+          <label>分类名称<input name="name" required></label>
+          <div class="actions"><button class="btn primary" type="submit">新增分类</button></div>
+        </form>
       </section>
       <section class="panel">
         <div class="panel-title"><h3>租户管理</h3><span>查看各独立系统状态、人员、钱包和流水规模</span></div>
@@ -1533,6 +1559,7 @@
       updateTenantStatus(button.dataset.tenantStatus, button.dataset.enabled === "true");
     }));
     document.querySelector("#subscriptionSettingsForm")?.addEventListener("submit", submitSubscriptionSettings);
+    document.querySelector("#systemSettingsForm")?.addEventListener("submit", submitSystemSettings);
     document.querySelector("#subscriptionHashForm")?.addEventListener("submit", submitSubscriptionHash);
     document.querySelectorAll("[data-manual-renew]").forEach((button) => button.addEventListener("click", () => manualRenewPayment(button.dataset.manualRenew)));
     document.querySelectorAll("[data-tenant-manual-renew]").forEach((button) => button.addEventListener("click", () => manualRenewTenant(button.dataset.tenantManualRenew)));
@@ -2002,6 +2029,21 @@
     }
   }
 
+  async function submitSystemSettings(event) {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(event.target).entries());
+    try {
+      await apiMutate("/api/system/settings", {
+        method: "PATCH",
+        body: { walletEnabledLimit: Number(data.walletEnabledLimit) },
+      });
+      render();
+      toast("系统限制已保存");
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+
   async function submitSubscriptionHash(event) {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.target).entries());
@@ -2460,6 +2502,10 @@
     state.subscriptionSettings.platformWalletAddress ||= "";
     state.subscriptionSettings.enabled = state.subscriptionSettings.enabled === true;
     state.subscriptionSettings.autoDisable = state.subscriptionSettings.autoDisable !== false;
+    state.systemSettings ||= { walletEnabledLimit: 0 };
+    state.systemSettings.walletEnabledLimit = Number.isInteger(Number(state.systemSettings.walletEnabledLimit)) && Number(state.systemSettings.walletEnabledLimit) >= 0
+      ? Number(state.systemSettings.walletEnabledLimit)
+      : 0;
     state.entries ||= [];
     state.legacyEntries ||= [];
     state.tenants.forEach((tenant) => {

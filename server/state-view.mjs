@@ -31,6 +31,9 @@ export function stateForUser(state, user) {
     platformWalletAddress: safeState.subscriptionSettings?.platformWalletAddress || "",
     autoDisable: safeState.subscriptionSettings?.autoDisable !== false,
   };
+  safeState.systemSettings = {
+    walletEnabledLimit: Number(safeState.systemSettings?.walletEnabledLimit || 0),
+  };
   safeState.users = [...administrators, ...tenantUsers];
   safeState.wallets = safeState.wallets.filter((item) => item.tenantId === tenantId);
   safeState.walletBalanceSnapshots = (safeState.walletBalanceSnapshots || []).filter((item) => item.tenantId === tenantId);
