@@ -417,6 +417,12 @@
     return date.toISOString().slice(0, 16);
   }
 
+  function managedFromMax() {
+    const date = new Date();
+    date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+    return date.toISOString().slice(0, 16);
+  }
+
   function roleLabel(role) {
     return { admin: "管理员", supervisor: "主管", employee: "员工" }[role] || role;
   }
@@ -899,9 +905,10 @@
                 <option value="today">从今天开始</option>
                 <option value="7">最近 7 天</option>
                 <option value="30">最近 30 天</option>
+                <option value="custom">自定义时间（30 天内）</option>
               </select>
             </label>
-            <label>纳入管理起始时间<input name="managedFrom" type="datetime-local" value="${managedFromPreset("today")}" required readonly data-managed-from></label>
+            <label>纳入管理起始时间<input name="managedFrom" type="datetime-local" value="${managedFromPreset("today")}" min="${managedFromPreset("30")}" max="${managedFromMax()}" required readonly data-managed-from></label>
             <p class="form-hint">纳入管理时间用于划定需要处理的链上流水范围：起始时间之后的流水会进入待批注，起始时间之前的历史流水默认只可查询，不要求补批注。</p>
             <div class="actions"><button class="btn primary" type="submit">新增钱包</button></div>
           </form>
@@ -1334,7 +1341,7 @@
         ])}
         ${helpSection("六、钱包管理", [
           "主管可新增 TRC20 USDT 钱包、设置钱包纳入管理起始时间、查看链上余额和同步状态、停用或启用钱包、手动触发链上同步。",
-          "纳入管理范围只能选择从今天开始、最近 7 天或最近 30 天。",
+          "纳入管理范围可选择从今天开始、最近 7 天、最近 30 天，或自定义最近 30 天内的具体时间。",
           "钱包不能删除，停用后可再次启用，不需要重新添加。",
           "停用钱包不影响历史流水，启用后会重新参与链上同步。",
           "停用钱包只是暂停自动同步和新增待办，重新启用后会自动补同步停用期间的链上流水。",
@@ -1516,7 +1523,9 @@
     document.querySelector("[data-cancel-edit]")?.addEventListener("click", () => { state.editingAnnotationId = null; render(); });
     document.querySelector("#walletForm")?.addEventListener("submit", submitWallet);
     document.querySelector("[data-managed-preset]")?.addEventListener("change", (event) => {
-      document.querySelector("[data-managed-from]").value = managedFromPreset(event.target.value);
+      const input = document.querySelector("[data-managed-from]");
+      input.readOnly = event.target.value !== "custom";
+      input.value = event.target.value === "custom" ? input.value : managedFromPreset(event.target.value);
     });
     document.querySelector("#userForm")?.addEventListener("submit", submitUser);
     document.querySelector("#tenantForm")?.addEventListener("submit", submitTenant);
