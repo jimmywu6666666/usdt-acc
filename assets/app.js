@@ -20,6 +20,7 @@
   const defaultEntryFilters = () => ({ from: daysAgoInputValue(29), to: dateInputValue(new Date()) });
   const defaultLogFilters = () => ({ from: daysAgoInputValue(6), to: dateInputValue(new Date()) });
   const defaultReceivableFilters = () => ({});
+  const defaultAccountFilters = () => ({ tenantStatus: "enabled", role: "supervisor" });
   const statusMap = {
     unannotated: ["待批注", "orange"],
     pending: ["待审核", "amber"],
@@ -184,6 +185,7 @@
   let entriesPage = 1;
   let logFilters = defaultLogFilters();
   let receivableFilters = defaultReceivableFilters();
+  let accountFilters = defaultAccountFilters();
   let logsPage = 1;
   let serverMetrics = null;
   let serverMetricsTimer = null;
@@ -261,6 +263,7 @@
       logFilters,
       logsPage,
       receivableFilters,
+      accountFilters,
     }));
   }
 
@@ -273,6 +276,7 @@
     if (ui.logFilters) logFilters = { ...defaultLogFilters(), ...ui.logFilters };
     if (Number.isInteger(Number(ui.logsPage)) && Number(ui.logsPage) > 0) logsPage = Number(ui.logsPage);
     if (ui.receivableFilters) receivableFilters = { ...defaultReceivableFilters(), ...ui.receivableFilters };
+    if (ui.accountFilters) accountFilters = { ...defaultAccountFilters(), ...ui.accountFilters };
   }
 
   function applyLoadedState(nextState, { preserveUi = true } = {}) {
@@ -1480,8 +1484,33 @@
     const role = currentUser().role;
     const canCreate = role === "supervisor";
     const desc = role === "admin"
-      ? "管理员可维护自己的账号，也可帮助租户账号重置密码或登录密钥"
+      ? "开通和管理租户，维护主管账号、登录密码和登录密钥"
       : "主管可创建员工或主管账号，并设置员工是否可查看全部账目";
+    if (role === "admin") {
+      return `
+        ${pageHead("账号管理", desc)}
+        <section class="grid two-col">
+          <div class="panel"><div class="panel-title"><h3>开通独立系统</h3></div>
+            <form id="tenantForm" class="form-grid one">
+              <label>系统名称<input name="name" required></label>
+              <label>首位主管姓名<input name="supervisorName" required></label>
+              <label>主管登录账号<input name="supervisorLoginName" autocomplete="off" required placeholder="3-32 位字母、数字或 _ . @ -"></label>
+              <label>主管初始密码<input name="supervisorPassword" type="password" autocomplete="new-password" minlength="6" required placeholder="至少 6 位"></label>
+              <div class="actions"><button class="btn primary" type="submit">开通系统</button></div>
+            </form>
+          </div>
+          <div class="panel">
+            <div class="panel-title"><h3>账号筛选</h3><span>默认只看启用中的系统里的主管账号</span></div>
+            ${renderAccountFilters()}
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-title"><h3>租户管理</h3><span>查看各系统状态、主管、钱包和流水规模</span></div>
+          ${renderTenantManagement()}
+        </section>
+        <section class="panel">${renderUserTable()}</section>
+      `;
+    }
     return `
       ${pageHead("账号管理", desc)}
       ${canCreate ? `<section class="user-management-layout">
@@ -1501,7 +1530,7 @@
 
   function renderUserTable() {
     const isAdmin = currentUser().role === "admin";
-    const users = isAdmin ? state.users : tenantUsers();
+    const users = isAdmin ? filteredAdminUsers() : tenantUsers();
     const tenantColumn = isAdmin ? "<th>所属系统</th>" : "";
     const rows = users.map((user) => {
       const canEditPermission = user.role === "employee" && (isAdmin || currentUser().role === "supervisor");
@@ -1525,6 +1554,45 @@
       <thead><tr><th>姓名</th><th>登录账号</th>${tenantColumn}<th>角色</th><th>登录密钥</th><th>查看全部账目</th><th>操作</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="${isAdmin ? 7 : 6}" class="empty">暂无账号</td></tr>`}</tbody>
     </table></div>`;
+  }
+
+  function renderAccountFilters() {
+    return `<form id="accountFilters" class="form-grid one compact-form">
+      <label>所属系统状态<select name="tenantStatus">
+        <option value="enabled" ${accountFilters.tenantStatus === "enabled" ? "selected" : ""}>启用中的系统</option>
+        <option value="disabled" ${accountFilters.tenantStatus === "disabled" ? "selected" : ""}>已停用的系统</option>
+        <option value="all" ${accountFilters.tenantStatus === "all" ? "selected" : ""}>全部系统</option>
+        <option value="platform" ${accountFilters.tenantStatus === "platform" ? "selected" : ""}>平台账号</option>
+      </select></label>
+      <label>账号角色<select name="role">
+        <option value="supervisor" ${accountFilters.role === "supervisor" ? "selected" : ""}>主管</option>
+        <option value="employee" ${accountFilters.role === "employee" ? "selected" : ""}>员工</option>
+        <option value="admin" ${accountFilters.role === "admin" ? "selected" : ""}>管理员</option>
+        <option value="all" ${accountFilters.role === "all" ? "selected" : ""}>全部角色</option>
+      </select></label>
+      <label>关键词<input name="keyword" value="${escapeHtml(accountFilters.keyword || "")}" placeholder="姓名、登录账号、系统"></label>
+      <div class="actions"><button class="btn primary" type="submit">查询</button><button class="btn" type="reset">重置</button></div>
+    </form>`;
+  }
+
+  function filteredAdminUsers() {
+    const keyword = String(accountFilters.keyword || "").trim();
+    return state.users.filter((user) => {
+      const tenant = user.tenantId ? state.tenants.find((item) => item.id === user.tenantId) : null;
+      if (accountFilters.role && accountFilters.role !== "all" && user.role !== accountFilters.role) return false;
+      if (accountFilters.tenantStatus === "platform" && user.tenantId) return false;
+      if (accountFilters.tenantStatus === "enabled" && (!tenant || tenant.enabled === false)) return false;
+      if (accountFilters.tenantStatus === "disabled" && (!tenant || tenant.enabled !== false)) return false;
+      if (keyword) {
+        const text = `${user.name || ""} ${user.loginName || ""} ${tenant?.name || "平台"}`;
+        if (!text.includes(keyword)) return false;
+      }
+      return true;
+    }).sort((left, right) => {
+      const leftTenant = left.tenantId ? tenantName(left.tenantId) : "平台";
+      const rightTenant = right.tenantId ? tenantName(right.tenantId) : "平台";
+      return leftTenant.localeCompare(rightTenant, "zh-CN") || roleLabel(left.role).localeCompare(roleLabel(right.role), "zh-CN") || String(left.name).localeCompare(String(right.name), "zh-CN");
+    });
   }
 
   function renderSubscription() {
@@ -1666,23 +1734,22 @@
   function renderAdmin() {
     if (currentUser().role !== "admin") return `<div class="panel empty">只有管理员可以进入系统管理</div>`;
     return `
-      ${pageHead("系统管理", "开通和管理独立系统，并维护全局收支分类")}
+      ${pageHead("系统管理", "维护系统级限制和统一收支分类")}
       <section class="grid two-col">
-        <div class="panel"><div class="panel-title"><h3>开通独立系统</h3></div>
-          <form id="tenantForm" class="form-grid one">
-            <label>系统名称<input name="name" required></label>
-            <label>首位主管姓名<input name="supervisorName" required></label>
-            <label>主管登录账号<input name="supervisorLoginName" autocomplete="off" required placeholder="3-32 位字母、数字或 _ . @ -"></label>
-            <label>主管初始密码<input name="supervisorPassword" type="password" autocomplete="new-password" minlength="6" required placeholder="至少 6 位"></label>
-            <div class="actions"><button class="btn primary" type="submit">开通系统</button></div>
-          </form>
-        </div>
         <div class="panel"><div class="panel-title"><h3>钱包启用限制</h3><span>按每个系统单独计算</span></div>
           <form id="systemSettingsForm" class="form-grid one">
             <label>每个系统最多启用钱包数<input name="walletEnabledLimit" type="number" min="0" step="1" value="${escapeHtml(state.systemSettings?.walletEnabledLimit ?? 0)}" required></label>
             <p class="form-hint">填 0 表示不限制；达到限制后，主管不能新增启用钱包，也不能把停用钱包重新启用。</p>
             <div class="actions"><button class="btn primary" type="submit">保存限制</button></div>
           </form>
+        </div>
+        <div class="panel">
+          <div class="panel-title"><h3>管理入口</h3></div>
+          <div class="metric-list">
+            <div><span>开通系统和租户状态</span><strong>账号管理</strong></div>
+            <div><span>租用收费和续费</span><strong>租用管理</strong></div>
+            <div><span>服务器性能和备份</span><strong>服务器管理</strong></div>
+          </div>
         </div>
       </section>
       <section class="panel">
@@ -1692,10 +1759,6 @@
           <label>分类名称<input name="name" required></label>
           <div class="actions"><button class="btn primary" type="submit">新增分类</button></div>
         </form>
-      </section>
-      <section class="panel">
-        <div class="panel-title"><h3>租户管理</h3><span>查看各独立系统状态、人员、钱包和流水规模</span></div>
-        ${renderTenantManagement()}
       </section>
       <section class="panel">
         <div class="panel-title"><h3>统一分类列表</h3><span>修改只影响后续批注可选项，历史已审核记录保持原分类</span></div>
@@ -1965,7 +2028,9 @@
           "纳入管理起始时间创建后不可修改，避免历史流水统计口径发生变化。",
         ])}
         ${helpSection("八、账号管理", [
-          "管理员可以维护自己的账号，也可以帮助各系统账号重置登录密码或登录密钥。",
+          "管理员可以在账号管理中开通系统、查看租户状态，并维护自己的账号和各系统账号。",
+          "管理员账号列表默认显示启用中的系统里的主管账号，可按所属系统状态、账号角色和关键词筛选。",
+          "管理员可以帮助各系统账号重置登录密码或登录密钥。",
           "主管可以创建员工或主管账号，并设置员工是否允许查看全部账目。",
           "新增账号时需要填写姓名、登录账号和初始密码；正式登录页使用账号和密码登录，不再选择角色。",
           "新增账号后系统会显示登录密钥和扫码链接，请交给对应人员保存到验证器；重置登录密钥后旧验证码会立即失效。",
@@ -2208,6 +2273,18 @@
     document.querySelector("#receivableFilters")?.addEventListener("reset", (event) => {
       event.preventDefault();
       receivableFilters = defaultReceivableFilters();
+      render();
+    });
+    document.querySelector("#accountFilters")?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      accountFilters = { ...defaultAccountFilters(), ...Object.fromEntries(new FormData(event.target).entries()) };
+      save();
+      render();
+    });
+    document.querySelector("#accountFilters")?.addEventListener("reset", (event) => {
+      event.preventDefault();
+      accountFilters = defaultAccountFilters();
+      save();
       render();
     });
     document.querySelector("[data-action='refresh-server']")?.addEventListener("click", () => refreshServerMetrics().then(render));
