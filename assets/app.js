@@ -2599,16 +2599,40 @@
     }
   }
 
-  async function voidReceivable(itemId) {
-    const reason = prompt("请输入作废原因");
-    if (!reason?.trim()) return;
-    try {
-      await apiMutate(`/api/receivable-payables/${encodeURIComponent(itemId)}/void`, { body: { reason } });
-      render();
-      toast("往来款已作废");
-    } catch (error) {
-      toast(error.message);
-    }
+  function voidReceivable(itemId) {
+    const item = tenantReceivables().find((entry) => entry.id === itemId);
+    if (!item) return;
+    const overlay = createFormModal({
+      title: `作废${rpTypeMap[item.type]}`,
+      desc: "作废后该往来款不再参与待收待付统计；请确认对象和金额无误。",
+      danger: true,
+      body: `
+        <section class="annotation-modal-summary">
+          <div><span>目标方</span><strong>${escapeHtml(item.counterparty)}</strong></div>
+          <div><span>类型</span><strong>${badge({ receivable: ["应收款", "green"], payable: ["应付款", "red"] }, item.type)}</strong></div>
+          <div><span>金额</span><strong>${money(item.amount)} USDT</strong></div>
+          <div><span>已平</span><strong>${money(item.settledAmount || 0)} USDT</strong></div>
+          <div><span>剩余</span><strong>${money(item.remainingAmount || 0)} USDT</strong></div>
+          <div><span>状态</span><strong>${badge(rpStatusMap, item.status)} ${badge(rpReviewMap, item.reviewStatus)}</strong></div>
+          <div><span>创建人</span><strong>${escapeHtml(userName(item.createdBy))}</strong></div>
+          <div><span>创建时间</span><strong>${formatDate(item.createdAt)}</strong></div>
+          <div class="wide"><span>业务说明</span><strong>${escapeHtml(item.note || "-")}</strong></div>
+        </section>
+        <label>作废原因
+          <textarea name="reason" required placeholder="说明为什么需要作废"></textarea>
+        </label>
+      `,
+      submitText: "确认作废",
+      onSubmit: async (formData, close) => {
+        await apiMutate(`/api/receivable-payables/${encodeURIComponent(item.id)}/void`, {
+          body: { reason: formData.get("reason") },
+        });
+        close();
+        render();
+        toast("往来款已作废");
+      },
+    });
+    document.body.append(overlay);
   }
 
   function openReceivableDetail(itemId) {
