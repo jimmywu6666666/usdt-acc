@@ -959,7 +959,7 @@ button {
 
 .ticket-message-viewer {
   position: fixed;
-  z-index: 90;
+  z-index: 110;
   inset: 0;
   display: grid;
   place-items: center;
@@ -2471,7 +2471,7 @@ tr:last-child td {
 .proof-viewer {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 120;
   display: grid;
   place-items: center;
   padding: 24px;
