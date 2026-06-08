@@ -1995,6 +1995,18 @@
       overlay.querySelectorAll("[data-ticket-attachment]").forEach((button) => button.addEventListener("click", () => {
         previewTicketAttachment(button.dataset.ticketId, button.dataset.messageId);
       }));
+      overlay.querySelectorAll("[data-ticket-message]").forEach((messageNode) => {
+        const openMessage = () => openTicketMessageViewer(ticket.id, messageNode.dataset.messageId);
+        messageNode.addEventListener("click", (event) => {
+          if (event.target.closest("[data-ticket-attachment]")) return;
+          openMessage();
+        });
+        messageNode.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          openMessage();
+        });
+      });
       overlay.querySelector(".form-modal-actions").insertAdjacentHTML("afterbegin", renderTicketStatusActions(ticket));
       overlay.querySelectorAll("[data-ticket-status]").forEach((button) => button.addEventListener("click", async (event) => {
         event.preventDefault();
@@ -2007,11 +2019,51 @@
   function renderTicketMessage(ticket, message) {
     const actor = state.users.find((item) => item.id === message.userId);
     const side = actor?.role === "admin" ? "admin" : "tenant";
-    return `<article class="ticket-message ${side}">
+    return `<article class="ticket-message ${side}" role="button" tabindex="0" data-ticket-message data-message-id="${escapeHtml(message.id)}" aria-label="查看工单消息详情">
       <div class="ticket-message-head"><strong>${escapeHtml(userName(message.userId))}</strong><span>${formatDate(message.createdAt)}</span></div>
       <p class="ticket-message-content">${escapeHtml(message.content)}</p>
       ${message.attachmentName ? `<div class="ticket-attachment-row"><button class="ticket-attachment-button" type="button" data-ticket-attachment data-ticket-id="${escapeHtml(ticket.id)}" data-message-id="${escapeHtml(message.id)}">${escapeHtml(message.attachmentName)}</button></div>` : ""}
     </article>`;
+  }
+
+  function openTicketMessageViewer(ticketId, messageId) {
+    const ticket = state.supportTickets.find((item) => item.id === ticketId);
+    const message = ticket?.messages?.find((item) => item.id === messageId);
+    if (!ticket || !message) return;
+    const overlay = document.createElement("div");
+    overlay.className = "ticket-message-viewer";
+    overlay.innerHTML = `
+      <section class="ticket-message-viewer-dialog" role="dialog" aria-modal="true" aria-label="工单消息详情">
+        <div class="ticket-message-viewer-head">
+          <div>
+            <strong>${escapeHtml(userName(message.userId))}</strong>
+            <span>${formatDate(message.createdAt)}</span>
+          </div>
+          <button class="btn pagination-icon" type="button" data-ticket-message-close aria-label="关闭">×</button>
+        </div>
+        <div class="ticket-message-viewer-body">
+          <p>${escapeHtml(message.content)}</p>
+          ${message.attachmentName ? `<button class="ticket-attachment-button" type="button" data-ticket-attachment data-ticket-id="${escapeHtml(ticket.id)}" data-message-id="${escapeHtml(message.id)}">${escapeHtml(message.attachmentName)}</button>` : ""}
+        </div>
+        <div class="ticket-message-viewer-actions">
+          <button class="btn primary" type="button" data-ticket-message-close>关闭</button>
+        </div>
+      </section>`;
+    const close = () => {
+      document.removeEventListener("keydown", handleKeydown);
+      overlay.remove();
+    };
+    const handleKeydown = (event) => {
+      if (event.key === "Escape") close();
+    };
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay || event.target.closest("[data-ticket-message-close]")) close();
+    });
+    overlay.querySelectorAll("[data-ticket-attachment]").forEach((button) => button.addEventListener("click", () => {
+      previewTicketAttachment(button.dataset.ticketId, button.dataset.messageId);
+    }));
+    document.addEventListener("keydown", handleKeydown);
+    document.body.append(overlay);
   }
 
   function renderProofUploadField(inputId) {
