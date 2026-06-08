@@ -3016,6 +3016,7 @@
   async function submitSubscriptionHash(event) {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.target).entries());
+    if (!confirm("确认提交这笔续费交易哈希？系统会校验到账钱包、确认状态和是否重复提交。")) return;
     try {
       await apiMutate("/api/subscription/submit-hash", { body: { hash: data.hash } });
       render();
@@ -3327,6 +3328,7 @@
   async function submitCategory(event) {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.target).entries());
+    if (!confirm(`确认新增${data.type === "expense" ? "出账" : "进账"}分类「${data.name || ""}」？`)) return;
     try {
       await apiMutate("/api/categories", { body: data });
       render();
