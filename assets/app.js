@@ -538,8 +538,7 @@
       && tx.transactionType !== "transfer"
       && tx.internalTransferStatus !== "pending"
       && isManagedTransaction(tx)
-      && !isTxUsedForReceivable(tx.id)
-      && receivablesForTransaction(tx).length > 0;
+      && !isTxUsedForReceivable(tx.id);
   }
 
   function isManagedTransaction(tx) {
