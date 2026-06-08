@@ -3,6 +3,7 @@ import {
   enforceTenantSubscriptions,
   recordWalletBalanceSnapshot,
   syncChainTransactions,
+  tenantSubscriptionActive,
 } from "./domain.mjs";
 
 const DEFAULT_INITIAL_DAYS = 30;
@@ -137,7 +138,8 @@ export function startChainSyncScheduler({
         });
       }
       const tenants = state?.tenants?.filter((tenant) => (
-        tenant.enabled && state.wallets.some((wallet) => wallet.tenantId === tenant.id && wallet.enabled)
+        tenantSubscriptionActive(state, tenant.id, status.lastStartedAt)
+        && state.wallets.some((wallet) => wallet.tenantId === tenant.id && wallet.enabled)
       )) || [];
       for (const tenant of tenants) {
         try {

@@ -48,7 +48,7 @@ function ledgerState(overrides = {}) {
     activeUserId: "admin",
     activeView: "dashboard",
     categories: { income: ["客户回款", "其他进账"], expense: ["供应商付款", "其他出账"] },
-    tenants: [{ id: "tenant_alpha", name: "Alpha", enabled: true }],
+    tenants: [{ id: "tenant_alpha", name: "Alpha", enabled: true, subscriptionExpiresAt: "2026-12-31T00:00:00.000Z", subscriptionStatus: "active" }],
     users: [
       { id: "admin", tenantId: null, name: "管理员", role: "admin", canViewAll: true },
       { id: "sup", tenantId: "tenant_alpha", name: "主管", role: "supervisor", canViewAll: true },
@@ -83,6 +83,22 @@ function annotate(state, overrides = {}) {
 
 test("accepts the chain transaction and annotation state shape", () => {
   assert.equal(validateState(ledgerState()), null);
+});
+
+test("unopened tenant cannot perform billable business operations", () => {
+  const state = ledgerState({
+    tenants: [{ id: "tenant_alpha", name: "Alpha", enabled: true, subscriptionExpiresAt: "", subscriptionStatus: "unset" }],
+  });
+  assert.throws(() => createWallet(state, {
+    user: user(state, "sup"),
+    input: { alias: "新钱包", chain: "TRC20", address: "TUfGNh99WN3GH5WjnqFKottWuYKpjomNbd" },
+  }), /租用未开通/);
+  assert.throws(() => annotate(state), /租用未开通/);
+  assert.throws(() => createReceivablePayable(state, {
+    user: user(state, "emp"),
+    input: { type: "receivable", counterparty: "客户A", amount: 100, category: "客户回款", note: "测试应收" },
+  }), /租用未开通/);
+  assert.throws(() => syncChainTransactions(state, { user: user(state, "sup"), tenantId: "tenant_alpha" }), /租用未开通/);
 });
 
 test("migrates a legacy matched ledger entry into an annotation", () => {

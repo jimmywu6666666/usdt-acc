@@ -148,6 +148,7 @@ export function walletBalanceSnapshotForDate(state, { walletId, dateKey }) {
 
 export function createAnnotation(state, { user, input, now = new Date().toISOString() }) {
   reconcileState(state);
+  assertTenantSubscriptionActive(state, user?.tenantId);
   const tx = getVisibleTransaction(state, user, input.chainTxId);
   if (!isManagedTransactionGroup(state, tx)) {
     throw badRequest("历史无需批注流水不需要批注");
@@ -186,6 +187,7 @@ export function createAnnotation(state, { user, input, now = new Date().toISOStr
 export function resubmitAnnotation(state, { user, annotationId, input, now = new Date().toISOString() }) {
   reconcileState(state);
   const previous = findAnnotation(state, annotationId);
+  assertTenantSubscriptionActive(state, previous.tenantId);
   if (previous.status !== "rejected") throw badRequest("只有已驳回的批注可以修改后重新提交");
   if (user.role === "employee" && previous.annotatedBy !== user.id) throw forbidden("只能修改自己提交的批注");
   if (user.role !== "admin" && previous.tenantId !== user.tenantId) throw forbidden("没有操作该批注的权限");
@@ -210,6 +212,7 @@ export function resubmitAnnotation(state, { user, annotationId, input, now = new
 export function reviewAnnotation(state, { user, annotationId, action, rejectionReason, now = new Date().toISOString() }) {
   reconcileState(state);
   const annotation = findAnnotation(state, annotationId);
+  assertTenantSubscriptionActive(state, annotation.tenantId);
   assertSupervisor(state, user.id, annotation.tenantId);
   if (annotation.status !== "pending") throw badRequest("只有待审核批注可以处理");
   if (!["approve", "reject"].includes(action)) throw badRequest("审核操作不正确");
@@ -252,6 +255,7 @@ export function reviewAnnotation(state, { user, annotationId, action, rejectionR
 export function requestAnnotationCorrection(state, { user, annotationId, input, now = new Date().toISOString() }) {
   reconcileState(state);
   const previous = findAnnotation(state, annotationId);
+  assertTenantSubscriptionActive(state, previous.tenantId);
   if (previous.status !== "approved" || previous.correctionType === "reversal") throw badRequest("只有当前已通过批注可以申请修正");
   if (user.role === "employee" && previous.annotatedBy !== user.id) throw forbidden("只能修正自己提交的批注");
   if (user.role !== "admin" && previous.tenantId !== user.tenantId) throw forbidden("没有操作该批注的权限");
@@ -267,6 +271,7 @@ export function requestAnnotationCorrection(state, { user, annotationId, input, 
 export function requestAnnotationReversal(state, { user, annotationId, reason, now = new Date().toISOString() }) {
   reconcileState(state);
   const previous = findAnnotation(state, annotationId);
+  assertTenantSubscriptionActive(state, previous.tenantId);
   if (previous.status !== "approved" || previous.correctionType === "reversal") throw badRequest("只有当前已通过批注可以申请冲正");
   if (user.role === "employee" && previous.annotatedBy !== user.id) throw forbidden("只能冲正自己提交的批注");
   if (user.role !== "admin" && previous.tenantId !== user.tenantId) throw forbidden("没有操作该批注的权限");
@@ -295,6 +300,7 @@ export function requestAnnotationReversal(state, { user, annotationId, reason, n
 export function markTransactionNonBusiness(state, { user, txId, reason, now = new Date().toISOString() }) {
   reconcileState(state);
   const tx = getVisibleTransaction(state, user, txId);
+  assertTenantSubscriptionActive(state, tx.tenantId);
   assertSupervisorOrAdmin(state, user, tx.tenantId);
   if (!tx.confirmed) throw badRequest("链上交易尚未确认，暂时不能标记非业务");
   if (tx.transactionType === "transfer" && tx.internalTransferStatus !== "paired") {
@@ -337,6 +343,7 @@ export function markTransactionNonBusiness(state, { user, txId, reason, now = ne
 export function restoreNonBusinessTransaction(state, { user, annotationId, now = new Date().toISOString() }) {
   reconcileState(state);
   const annotation = findAnnotation(state, annotationId);
+  assertTenantSubscriptionActive(state, annotation.tenantId);
   if (annotation.status !== "non_business") throw badRequest("只有非业务流水可以恢复待批注");
   assertSupervisorOrAdmin(state, user, annotation.tenantId);
   const tx = getVisibleTransaction(state, user, annotation.chainTxId);
@@ -354,6 +361,7 @@ export function createReceivablePayable(state, { user, input, now = new Date().t
   reconcileState(state);
   if (!["employee", "supervisor"].includes(user?.role)) throw forbidden("只有员工或主管可以创建往来款");
   const tenantId = user.tenantId;
+  assertTenantSubscriptionActive(state, tenantId);
   const type = String(input.type || "");
   if (!["receivable", "payable"].includes(type)) throw badRequest("往来款类型不正确");
   const amount = Number(input.amount);
@@ -401,6 +409,7 @@ export function reviewReceivablePayable(state, { user, itemId, action, rejection
   reconcileState(state);
   const item = state.receivablePayables.find((entry) => entry.id === itemId);
   if (!item) throw notFound("往来款不存在");
+  assertTenantSubscriptionActive(state, item.tenantId);
   assertSupervisor(state, user.id, item.tenantId);
   if (item.reviewStatus !== "pending") throw badRequest("该往来款当前不在待审核状态");
   if (action === "approve") {
@@ -430,6 +439,7 @@ export function createReceivableSettlement(state, { user, itemId, txId, note = "
   reconcileState(state);
   const item = state.receivablePayables.find((entry) => entry.id === itemId);
   if (!item) throw notFound("往来款不存在");
+  assertTenantSubscriptionActive(state, item.tenantId);
   if (user.role !== "admin" && item.tenantId !== user.tenantId) throw forbidden("没有操作该往来款的权限");
   if (!["employee", "supervisor"].includes(user.role)) throw forbidden("只有员工或主管可以提交平账");
   if (item.reviewStatus !== "approved") throw badRequest("往来款审核通过后才能平账");
@@ -478,6 +488,7 @@ export function reviewReceivableSettlement(state, { user, settlementId, action, 
   reconcileState(state);
   const settlement = state.receivableSettlements.find((entry) => entry.id === settlementId);
   if (!settlement) throw notFound("平账记录不存在");
+  assertTenantSubscriptionActive(state, settlement.tenantId);
   assertSupervisor(state, user.id, settlement.tenantId);
   if (settlement.status !== "pending") throw badRequest("该平账当前不在待审核状态");
   if (action === "approve") {
@@ -509,6 +520,7 @@ export function voidReceivablePayable(state, { user, itemId, reason, now = new D
   reconcileState(state);
   const item = state.receivablePayables.find((entry) => entry.id === itemId);
   if (!item) throw notFound("往来款不存在");
+  assertTenantSubscriptionActive(state, item.tenantId);
   assertSupervisor(state, user.id, item.tenantId);
   if (approvedSettlementsForItem(state, item.id).length) throw badRequest("已有有效平账记录，不能作废");
   const voidReason = String(reason || "").trim();
@@ -619,6 +631,7 @@ export function exportReceivablePayablesCsv(state, { user, filters = {} }) {
 
 export function createWallet(state, { user, input, now = new Date().toISOString() }) {
   assertSupervisor(state, user.id, user.tenantId);
+  assertTenantSubscriptionActive(state, user.tenantId);
   const alias = String(input.alias || "").trim();
   const address = String(input.address || "").trim();
   const chain = input.chain || "TRC20";
@@ -656,6 +669,7 @@ export function enableWallet(state, { user, walletId, now = new Date().toISOStri
   const wallet = state.wallets.find((item) => item.id === walletId);
   if (!wallet) throw notFound("钱包不存在");
   assertSupervisor(state, user.id, wallet.tenantId);
+  assertTenantSubscriptionActive(state, wallet.tenantId);
   if (!wallet.enabled) assertWalletEnabledLimit(state, wallet.tenantId);
   wallet.enabled = true;
   wallet.enabledAt = now;
@@ -977,6 +991,7 @@ export function syncChainTransactions(state, {
   const visibleTenantId = visibleTenantForUser(user, tenantId);
   if (!visibleTenantId) throw badRequest("请选择所属系统");
   assertSupervisorOrAdmin(state, user, visibleTenantId);
+  if (user?.role !== "admin") assertTenantSubscriptionActive(state, visibleTenantId);
   const wallets = state.wallets.filter((wallet) => wallet.tenantId === visibleTenantId && wallet.enabled);
   const created = [];
   const source = externalTransactions || wallets.map((wallet, index) => ({
@@ -1107,6 +1122,23 @@ export function assertAdmin(user) {
 export function assertSupervisorOrAdmin(state, user, tenantId) {
   if (user?.role === "admin") return user;
   return assertSupervisor(state, user?.id, tenantId);
+}
+
+export function assertTenantSubscriptionActive(state, tenantId, now = new Date().toISOString()) {
+  const tenant = state.tenants.find((item) => item.id === tenantId);
+  if (!tenant) throw forbidden("所属系统不存在");
+  if (tenant.enabled === false) throw forbidden("当前系统已停用，不能进行业务操作");
+  if (!tenant.subscriptionExpiresAt) throw forbidden("当前系统租用未开通，请先完成租用续费");
+  if (new Date(tenant.subscriptionExpiresAt).getTime() < new Date(now).getTime()) {
+    throw forbidden("当前系统租用已到期，请先完成租用续费");
+  }
+  return tenant;
+}
+
+export function tenantSubscriptionActive(state, tenantId, now = new Date().toISOString()) {
+  const tenant = state.tenants.find((item) => item.id === tenantId);
+  if (!tenant || tenant.enabled === false || !tenant.subscriptionExpiresAt) return false;
+  return new Date(tenant.subscriptionExpiresAt).getTime() >= new Date(now).getTime();
 }
 
 export function visibleTenantForUser(user, tenantId) {

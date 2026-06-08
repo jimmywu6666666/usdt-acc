@@ -456,6 +456,7 @@
 
   function canSettleTransaction(tx) {
     return ["employee", "supervisor"].includes(currentUser().role)
+      && tenantBusinessActive()
       && tx.transactionType !== "transfer"
       && tx.internalTransferStatus !== "pending"
       && isManagedTransaction(tx)
@@ -621,6 +622,22 @@
       expired: ["已到期", "red"],
       unset: ["未开通", "orange"],
     }, subscriptionStatusKey(tenant));
+  }
+
+  function tenantBusinessActive(tenant = currentTenant()) {
+    return tenant.enabled !== false && subscriptionStatusKey(tenant) === "active";
+  }
+
+  function tenantBusinessLockText(tenant = currentTenant()) {
+    if (tenant.enabled === false) return "当前系统已停用，暂不能进行新增钱包、批注、往来款、平账和审核等业务操作。";
+    if (!tenant.subscriptionExpiresAt) return "当前系统租用未开通，暂不能进行新增钱包、批注、往来款、平账和审核等业务操作。";
+    if (subscriptionStatusKey(tenant) === "expired") return "当前系统租用已到期，暂不能进行新增钱包、批注、往来款、平账和审核等业务操作。";
+    return "";
+  }
+
+  function renderTenantBusinessLockNotice() {
+    const message = tenantBusinessLockText();
+    return message ? `<div class="notice chain-status-off">${message}主管可在“租用续费”页面提交付款哈希。</div>` : "";
   }
 
   function platformPaymentStatusMap() {
@@ -953,6 +970,7 @@
     const wallets = tenantWallets();
     if (!wallets.length) return `<div class="empty">暂无钱包</div>`;
     const showActions = state.activeView === "wallets" && canReview();
+    const canEnableWallet = tenantBusinessActive();
     return `<div class="table-wrap wallet-balance-wrap"><table class="wallet-balance-table">
       <thead><tr><th>钱包 / 状态</th><th>链上余额</th><th>地址</th></tr></thead>
       <tbody>${wallets.map((wallet) => {
@@ -966,7 +984,7 @@
           <div class="wallet-cell-head"><strong>${escapeHtml(wallet.alias)}</strong>${status}</div>
           <div class="wallet-cell-meta">${escapeHtml(wallet.chain)} · 管理起点：${formatDate(wallet.managedFrom)}</div>
           ${syncText ? `<div class="wallet-cell-sync">${syncText}</div>` : ""}
-          ${showActions ? `<div class="wallet-cell-actions">${wallet.enabled ? `<button class="btn small danger" data-disable-wallet="${wallet.id}">停用</button>` : `<button class="btn small primary" data-enable-wallet="${wallet.id}">启用</button>`}</div>` : ""}
+          ${showActions ? `<div class="wallet-cell-actions">${wallet.enabled ? `<button class="btn small danger" data-disable-wallet="${wallet.id}">停用</button>` : `<button class="btn small primary" data-enable-wallet="${wallet.id}" ${canEnableWallet ? "" : "disabled"}>启用</button>`}</div>` : ""}
         </td>
         <td class="wallet-balance-value">${money(summary.current)}<br>${balanceChangeLine("今日变化", summary.todayChange)}<br>${balanceChangeLine("本月变化", summary.monthChange)}</td><td class="mono">${escapeHtml(wallet.address)}</td>
       </tr>`;
@@ -981,6 +999,7 @@
     const pageRows = rows.slice((entriesPage - 1) * ENTRY_PAGE_SIZE, entriesPage * ENTRY_PAGE_SIZE);
     return `
       ${pageHead("流水账目", "默认查看最近 30 天流水，可按状态、钱包、方向和关键词筛选", `<button class="btn primary" data-action="export">导出 CSV</button>`)}
+      ${renderTenantBusinessLockNotice()}
       <form id="filters" class="filters">
         <label>开始日期<input type="date" name="from" value="${escapeHtml(entryFilters.from)}"></label>
         <label>结束日期<input type="date" name="to" value="${escapeHtml(entryFilters.to)}"></label>
@@ -1094,12 +1113,13 @@
 
   function transactionActions(tx, annotation) {
     const actions = [`<button class="btn" data-detail="${tx.id}">详情</button>`];
-    if (!annotation && isManagedTransaction(tx) && tx.internalTransferStatus !== "pending") actions.push(`<button class="btn primary" data-annotate-tx="${tx.id}">批注</button>`);
+    const businessActive = tenantBusinessActive();
+    if (businessActive && !annotation && isManagedTransaction(tx) && tx.internalTransferStatus !== "pending") actions.push(`<button class="btn primary" data-annotate-tx="${tx.id}">批注</button>`);
     if (canSettleTransaction(tx)) actions.push(`<button class="btn settle" data-settle-tx="${tx.id}">${transactionDirection(tx) === "income" ? "平应收" : "平应付"}</button>`);
-    if (!annotation && isManagedTransaction(tx) && tx.internalTransferStatus !== "pending" && canManageNonBusiness()) actions.push(`<button class="btn warn" data-non-business="${tx.id}">非业务</button>`);
-    if (annotation?.status === "non_business" && canManageNonBusiness()) actions.push(`<button class="btn" data-restore-non-business="${annotation.id}">恢复待批注</button>`);
-    if (annotation?.status === "rejected" && canEditAnnotation(annotation)) actions.push(`<button class="btn primary" data-resubmit="${annotation.id}">修改重提</button>`);
-    if (annotation?.status === "approved" && annotation.correctionType !== "reversal" && canEditAnnotation(annotation)) {
+    if (businessActive && !annotation && isManagedTransaction(tx) && tx.internalTransferStatus !== "pending" && canManageNonBusiness()) actions.push(`<button class="btn warn" data-non-business="${tx.id}">非业务</button>`);
+    if (businessActive && annotation?.status === "non_business" && canManageNonBusiness()) actions.push(`<button class="btn" data-restore-non-business="${annotation.id}">恢复待批注</button>`);
+    if (businessActive && annotation?.status === "rejected" && canEditAnnotation(annotation)) actions.push(`<button class="btn primary" data-resubmit="${annotation.id}">修改重提</button>`);
+    if (businessActive && annotation?.status === "approved" && annotation.correctionType !== "reversal" && canEditAnnotation(annotation)) {
       actions.push(`<button class="btn warn" data-correct="${annotation.id}">修正</button>`);
       actions.push(`<button class="btn danger" data-reverse="${annotation.id}">冲正</button>`);
     }
@@ -1127,8 +1147,9 @@
     const categories = selectedTx ? selectedTx.transactionType === "transfer" ? ["内部划转"] : state.categories[selectedTx.direction] : [];
     return `
       ${pageHead(editing ? "修改并重新提交" : "批注链上流水", "先选择真实链上进出账，再补充业务分类、用途和凭证；金额及钱包不可修改")}
+      ${renderTenantBusinessLockNotice()}
       <section class="panel">
-        ${selectedTx ? `<form id="annotationForm" class="form-grid">
+        ${tenantBusinessActive() && selectedTx ? `<form id="annotationForm" class="form-grid">
           <label>链上流水
             <select name="chainTxId" data-chain-tx ${editing ? "disabled" : ""}>
               ${(editing ? [editingTx] : available).map((tx) => `<option value="${tx.id}" ${tx.id === selectedTx.id ? "selected" : ""}>${formatDate(tx.chainTime)} · ${typeMap[transactionDirection(tx)]} ${money(tx.amount)} · ${transactionWalletText(tx)}</option>`).join("")}
@@ -1160,12 +1181,14 @@
     const pending = state.annotations.filter((annotation) => annotation.tenantId === visibleTenantId() && annotation.status === "pending");
     const pendingReceivables = tenantReceivables().filter((item) => item.reviewStatus === "pending");
     const pendingSettlements = tenantSettlements().filter((settlement) => settlement.status === "pending");
+    const showActions = canReview() && tenantBusinessActive();
     return `
       ${pageHead("审核中心", canReview() ? "审核批注、往来款和平账申请，确认业务说明、凭证和链上金额是否一致" : "查看当前系统待审核事项，便于排查和跟进")}
+      ${renderTenantBusinessLockNotice()}
       ${canViewReviewCenter() ? `
-        <section class="review-section review-section-annotation" data-review-section="annotations"><div class="section-label"><h3>批注待审核</h3><span>${pending.length} 条</span></div>${renderReviewCards(pending, canReview())}</section>
-        <section class="review-section review-section-receivable" data-review-section="receivables"><div class="section-label"><h3>往来款待审核</h3><span>${pendingReceivables.length} 条</span></div>${renderReceivableReviewCards(pendingReceivables, canReview())}</section>
-        <section class="review-section review-section-settlement" data-review-section="settlements"><div class="section-label"><h3>平账待审核</h3><span>${pendingSettlements.length} 条</span></div>${renderSettlementReviewCards(pendingSettlements, canReview())}</section>
+        <section class="review-section review-section-annotation" data-review-section="annotations"><div class="section-label"><h3>批注待审核</h3><span>${pending.length} 条</span></div>${renderReviewCards(pending, showActions)}</section>
+        <section class="review-section review-section-receivable" data-review-section="receivables"><div class="section-label"><h3>往来款待审核</h3><span>${pendingReceivables.length} 条</span></div>${renderReceivableReviewCards(pendingReceivables, showActions)}</section>
+        <section class="review-section review-section-settlement" data-review-section="settlements"><div class="section-label"><h3>平账待审核</h3><span>${pendingSettlements.length} 条</span></div>${renderSettlementReviewCards(pendingSettlements, showActions)}</section>
       ` : `<div class="panel empty">当前账号没有审核权限</div>`}
     `;
   }
@@ -1237,9 +1260,10 @@
   function renderReceivables() {
     const items = filteredReceivables();
     const stats = summarizeReceivables(items);
-    const canCreate = ["employee", "supervisor"].includes(currentUser().role);
+    const canCreate = ["employee", "supervisor"].includes(currentUser().role) && tenantBusinessActive();
     return `
       ${pageHead("往来款管理", "管理应收款和应付款；平账从流水账目发起，先选链上流水再选往来款", `<button class="btn primary" data-action="export-receivables">导出 CSV</button>`)}
+      ${renderTenantBusinessLockNotice()}
       <section class="stats-grid rp-stats">
         ${renderRpStat("应收总额", stats.receivable.amount, "应收已收", stats.receivable.settled, "未收", stats.receivable.remaining, "多收", stats.receivable.over, "receivable")}
         ${renderRpStat("应付总额", stats.payable.amount, "应付已付", stats.payable.settled, "未付", stats.payable.remaining, "多付", stats.payable.over, "payable")}
@@ -1351,11 +1375,12 @@
 
   function receivableActions(item) {
     const actions = [`<button class="btn" data-rp-detail="${item.id}">详情</button>`];
-    if (canReview() && item.reviewStatus === "pending") {
+    const businessActive = tenantBusinessActive();
+    if (businessActive && canReview() && item.reviewStatus === "pending") {
       actions.push(`<button class="btn success" data-rp-review="${item.id}" data-action="approve">通过</button>`);
       actions.push(`<button class="btn danger" data-rp-review="${item.id}" data-action="reject">驳回</button>`);
     }
-    if (canReview() && !approvedSettlementsForReceivable(item.id).length && item.status !== "voided") {
+    if (businessActive && canReview() && !approvedSettlementsForReceivable(item.id).length && item.status !== "voided") {
       actions.push(`<button class="btn warn" data-rp-void="${item.id}">作废</button>`);
     }
     return actions.join("");
@@ -1369,34 +1394,37 @@
     const walletList = `<div class="panel wallet-list-panel"><div class="panel-title"><h3>钱包列表</h3></div>${renderWalletBalanceTable()}</div>`;
     const statusNotice = renderChainStatusNotice();
     const limitNotice = renderWalletLimitNotice();
-    const syncAction = canViewReviewCenter() ? `<button class="btn primary" data-action="sync-chain">立即同步</button>` : "";
+    const businessActive = tenantBusinessActive();
+    const syncAction = canViewReviewCenter() && businessActive ? `<button class="btn primary" data-action="sync-chain">立即同步</button>` : "";
     if (!canReview()) {
-      return `${pageHead("钱包管理", "查看本系统钱包、链上余额和同步状态，历史流水会永久保留", syncAction)}${statusNotice}${limitNotice}${walletList}`;
+      return `${pageHead("钱包管理", "查看本系统钱包、链上余额和同步状态，历史流水会永久保留", syncAction)}${renderTenantBusinessLockNotice()}${statusNotice}${limitNotice}${walletList}`;
     }
+    const createWalletPanel = businessActive ? `<div class="panel wallet-create-panel">
+      <div class="panel-title"><h3>新增钱包</h3></div>
+      <form id="walletForm" class="form-grid one">
+        <label>钱包别名<input name="alias" required></label>
+        <label>链类型<select name="chain"><option>TRC20</option></select></label>
+        <label>钱包地址<input name="address" required placeholder="T..."></label>
+        <label>纳入管理范围
+          <select name="managedPreset" data-managed-preset>
+            <option value="today">从今天开始</option>
+            <option value="7">最近 7 天</option>
+            <option value="30">最近 30 天</option>
+            <option value="custom">自定义时间（30 天内）</option>
+          </select>
+        </label>
+        <label>纳入管理起始时间<input name="managedFrom" type="datetime-local" value="${managedFromPreset("today")}" min="${managedFromPreset("30")}" max="${managedFromMax()}" required readonly data-managed-from></label>
+        <p class="form-hint">纳入管理时间用于划定需要处理的链上流水范围：起始时间之后的流水会进入待批注，起始时间之前的历史流水默认只可查询，不要求补批注。</p>
+        <div class="actions"><button class="btn primary" type="submit">新增钱包</button></div>
+      </form>
+    </div>` : `<div class="panel wallet-create-panel"><div class="panel-title"><h3>新增钱包</h3></div><div class="empty slim">租用有效后才可以新增或启用钱包。</div></div>`;
     return `
       ${pageHead("钱包管理", "维护本系统钱包、链上余额和同步状态，停用钱包不会影响历史流水", syncAction)}
+      ${renderTenantBusinessLockNotice()}
       ${statusNotice}
       ${limitNotice}
       <section class="grid two-col">
-        <div class="panel wallet-create-panel">
-          <div class="panel-title"><h3>新增钱包</h3></div>
-          <form id="walletForm" class="form-grid one">
-            <label>钱包别名<input name="alias" required></label>
-            <label>链类型<select name="chain"><option>TRC20</option></select></label>
-            <label>钱包地址<input name="address" required placeholder="T..."></label>
-            <label>纳入管理范围
-              <select name="managedPreset" data-managed-preset>
-                <option value="today">从今天开始</option>
-                <option value="7">最近 7 天</option>
-                <option value="30">最近 30 天</option>
-                <option value="custom">自定义时间（30 天内）</option>
-              </select>
-            </label>
-            <label>纳入管理起始时间<input name="managedFrom" type="datetime-local" value="${managedFromPreset("today")}" min="${managedFromPreset("30")}" max="${managedFromMax()}" required readonly data-managed-from></label>
-            <p class="form-hint">纳入管理时间用于划定需要处理的链上流水范围：起始时间之后的流水会进入待批注，起始时间之前的历史流水默认只可查询，不要求补批注。</p>
-            <div class="actions"><button class="btn primary" type="submit">新增钱包</button></div>
-          </form>
-        </div>
+        ${createWalletPanel}
         ${walletList}
       </section>
     `;
@@ -1878,6 +1906,7 @@
         ])}
         ${helpSection("九、租用续费", [
           "主管可在租用续费页面查看当前系统到期时间、剩余租用天数、系统启用状态、月租费用和平台收款钱包地址。",
+          "系统未开通、已到期或已停用时，可以登录查看历史和提交续费哈希，但不能新增钱包、启用钱包、提交批注、创建往来款、提交平账或处理审核。",
           "页面会显示本系统续费提交记录，包括交易哈希、金额、处理状态、续费时长和说明。",
           "续费时，先按页面显示的平台收款钱包完成 USDT 转账。",
           "转账完成后复制交易哈希，并在租用续费页面提交。",
@@ -2312,12 +2341,20 @@
   }
 
   function openAnnotation(txId) {
+    if (!tenantBusinessActive()) {
+      toast(tenantBusinessLockText());
+      return;
+    }
     const tx = state.chainTransactions.find((item) => item.id === txId);
     if (!tx) return;
     openAnnotationModal({ tx });
   }
 
   function editRejected(annotationId) {
+    if (!tenantBusinessActive()) {
+      toast(tenantBusinessLockText());
+      return;
+    }
     const editing = state.annotations.find((annotation) => annotation.id === annotationId);
     const tx = state.chainTransactions.find((item) => item.id === editing?.chainTxId);
     if (!editing || !tx) return;
@@ -2378,6 +2415,10 @@
 
   async function submitAnnotation(event) {
     event.preventDefault();
+    if (!tenantBusinessActive()) {
+      toast(tenantBusinessLockText());
+      return;
+    }
     const formData = new FormData(event.target);
     const data = Object.fromEntries(formData.entries());
     const editing = state.annotations.find((annotation) => annotation.id === state.editingAnnotationId);
@@ -2402,6 +2443,10 @@
   }
 
   async function review(annotationId, action) {
+    if (!tenantBusinessActive()) {
+      toast(tenantBusinessLockText());
+      return;
+    }
     let rejectionReason = "";
     if (action === "reject") {
       rejectionReason = prompt("请输入驳回原因，员工修改后可重新提交") || "";
@@ -2418,6 +2463,10 @@
   }
 
   function correctAnnotation(annotationId) {
+    if (!tenantBusinessActive()) {
+      toast(tenantBusinessLockText());
+      return;
+    }
     const annotation = state.annotations.find((item) => item.id === annotationId);
     const tx = state.chainTransactions.find((item) => item.id === annotation?.chainTxId);
     if (!annotation || !tx) return;
@@ -2456,6 +2505,10 @@
   }
 
   function reverseAnnotation(annotationId) {
+    if (!tenantBusinessActive()) {
+      toast(tenantBusinessLockText());
+      return;
+    }
     const annotation = state.annotations.find((item) => item.id === annotationId);
     const tx = state.chainTransactions.find((item) => item.id === annotation?.chainTxId);
     if (!annotation || !tx) return;
@@ -2484,6 +2537,10 @@
   }
 
   function markNonBusiness(txId) {
+    if (!tenantBusinessActive()) {
+      toast(tenantBusinessLockText());
+      return;
+    }
     const tx = state.chainTransactions.find((item) => item.id === txId);
     if (!tx) return;
     const overlay = createFormModal({
@@ -2511,6 +2568,10 @@
   }
 
   function restoreNonBusiness(annotationId) {
+    if (!tenantBusinessActive()) {
+      toast(tenantBusinessLockText());
+      return;
+    }
     const annotation = state.annotations.find((item) => item.id === annotationId);
     if (!annotation) return;
     const overlay = createFormModal({
@@ -2580,6 +2641,10 @@
 
   async function submitWallet(event) {
     event.preventDefault();
+    if (!tenantBusinessActive()) {
+      toast(tenantBusinessLockText());
+      return;
+    }
     const data = Object.fromEntries(new FormData(event.target).entries());
     if (!/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(data.address || "")) {
       toast("TRC20 钱包地址应为 T 开头的 34 位地址");
@@ -2695,6 +2760,10 @@
 
   async function submitReceivable(event) {
     event.preventDefault();
+    if (!tenantBusinessActive()) {
+      toast(tenantBusinessLockText());
+      return;
+    }
     const formData = new FormData(event.target);
     const data = Object.fromEntries(formData.entries());
     if (!confirm(`确认新增${data.type === "payable" ? "应付款" : "应收款"}「${data.counterparty || ""}」，金额 ${data.amount || 0} USDT？`)) return;
@@ -2719,6 +2788,10 @@
   }
 
   async function reviewReceivable(itemId, action) {
+    if (!tenantBusinessActive()) {
+      toast(tenantBusinessLockText());
+      return;
+    }
     let rejectionReason = "";
     if (action === "reject") {
       rejectionReason = prompt("请输入驳回原因") || "";
@@ -2735,6 +2808,10 @@
   }
 
   function openTransactionSettlement(txId) {
+    if (!tenantBusinessActive()) {
+      toast(tenantBusinessLockText());
+      return;
+    }
     const tx = tenantTransactions().find((entry) => entry.id === txId);
     if (!tx) return;
     const items = receivablesForTransaction(tx);
@@ -2796,6 +2873,10 @@
   }
 
   async function reviewReceivableSettlement(settlementId, action) {
+    if (!tenantBusinessActive()) {
+      toast(tenantBusinessLockText());
+      return;
+    }
     let rejectionReason = "";
     if (action === "reject") {
       rejectionReason = prompt("请输入驳回原因") || "";
@@ -2812,6 +2893,10 @@
   }
 
   function voidReceivable(itemId) {
+    if (!tenantBusinessActive()) {
+      toast(tenantBusinessLockText());
+      return;
+    }
     const item = tenantReceivables().find((entry) => entry.id === itemId);
     if (!item) return;
     const overlay = createFormModal({
@@ -2883,7 +2968,7 @@
         <div><dt>提交人</dt><dd>${escapeHtml(userName(settlement.submittedBy))}</dd></div>
         <div><dt>提交时间</dt><dd>${formatDate(settlement.submittedAt)}</dd></div>
         <div class="wide"><dt>链上流水</dt><dd>${tx ? `${formatDate(tx.chainTime)} · ${transactionWalletText(tx)} · ${renderCopyHash(tx.hash, { short: true })}` : "-"}</dd></div>
-        ${settlement.status === "pending" && canReview() ? `<div class="wide actions"><button class="btn success" data-rps-review="${settlement.id}" data-action="approve">审核通过</button><button class="btn danger" data-rps-review="${settlement.id}" data-action="reject">驳回</button></div>` : ""}
+        ${settlement.status === "pending" && canReview() && tenantBusinessActive() ? `<div class="wide actions"><button class="btn success" data-rps-review="${settlement.id}" data-action="approve">审核通过</button><button class="btn danger" data-rps-review="${settlement.id}" data-action="reject">驳回</button></div>` : ""}
         ${settlement.rejectionReason ? `<div class="wide"><dt>驳回原因</dt><dd>${escapeHtml(settlement.rejectionReason)}</dd></div>` : ""}
       </dl>
     </article>`;
@@ -3028,6 +3113,10 @@
   }
 
   async function enableWallet(walletId) {
+    if (!tenantBusinessActive()) {
+      toast(tenantBusinessLockText());
+      return;
+    }
     const wallet = state.wallets.find((item) => item.id === walletId);
     if (!wallet || !confirm(`确认启用钱包「${wallet.alias}」？启用后会重新参与链上同步。`)) return;
     try {
@@ -3040,6 +3129,10 @@
   }
 
   async function syncChain() {
+    if (!tenantBusinessActive()) {
+      toast(tenantBusinessLockText());
+      return;
+    }
     try {
       const payload = await apiMutate("/api/chain/sync", { body: { tenantId: visibleTenantId() } });
       await refreshChainStatus();

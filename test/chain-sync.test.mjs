@@ -5,7 +5,7 @@ import { retryOperation, startChainSyncScheduler, syncTenantWallets } from "../s
 function createState() {
   return {
     categories: { income: ["客户回款"], expense: ["供应商付款"] },
-    tenants: [{ id: "tenant", name: "团队", enabled: true }],
+    tenants: [{ id: "tenant", name: "团队", enabled: true, subscriptionExpiresAt: "2026-12-31T00:00:00.000Z", subscriptionStatus: "active" }],
     users: [{ id: "supervisor", tenantId: "tenant", name: "主管", role: "supervisor", canViewAll: true }],
     wallets: [
       { id: "wallet-a", tenantId: "tenant", alias: "钱包 A", address: "TA", enabled: true, managedFrom: "2026-06-01T00:00:00.000Z" },
@@ -226,6 +226,36 @@ test("automatic scheduler skips tenants without enabled wallets", async () => {
   state.wallets.forEach((wallet) => {
     wallet.enabled = false;
   });
+  let syncCalls = 0;
+  const scheduler = startChainSyncScheduler({
+    storage: memoryStorage(state),
+    tronProvider: {
+      kind: "tron",
+      async fetchWalletTransactions() {
+        syncCalls += 1;
+        return [];
+      },
+      async fetchWalletBalance() {
+        return 0;
+      },
+    },
+    env: { CHAIN_SYNC_INTERVAL_MINUTES: "5" },
+    setIntervalImpl() {
+      return { unref() {} };
+    },
+    setTimeoutImpl() {
+      return { unref() {} };
+    },
+  });
+  await scheduler.run();
+  assert.equal(syncCalls, 0);
+  assert.equal(scheduler.status.lastError, "");
+});
+
+test("automatic scheduler skips unopened tenants", async () => {
+  const state = createState();
+  state.tenants[0].subscriptionExpiresAt = "";
+  state.tenants[0].subscriptionStatus = "unset";
   let syncCalls = 0;
   const scheduler = startChainSyncScheduler({
     storage: memoryStorage(state),
