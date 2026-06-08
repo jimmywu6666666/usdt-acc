@@ -3015,6 +3015,12 @@ tr:last-child td {
     grid-template-columns: 1fr;
   }
 
+  .ticket-thread {
+    min-height: 210px;
+    max-height: min(300px, 42dvh);
+    padding: 12px;
+  }
+
   .form-modal {
     padding: 10px;
   }
