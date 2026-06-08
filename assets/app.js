@@ -902,6 +902,7 @@
               </select>
             </label>
             <label>纳入管理起始时间<input name="managedFrom" type="datetime-local" value="${managedFromPreset("today")}" required readonly data-managed-from></label>
+            <p class="form-hint">纳入管理时间用于划定需要处理的链上流水范围：起始时间之后的流水会进入待批注，起始时间之前的历史流水默认只可查询，不要求补批注。</p>
             <div class="actions"><button class="btn primary" type="submit">新增钱包</button></div>
           </form>
         </div>
