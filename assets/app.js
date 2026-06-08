@@ -603,7 +603,7 @@
   }
 
   function subscriptionStatusText(tenant) {
-    if (!tenant.subscriptionExpiresAt) return "未设置到期时间";
+    if (!tenant.subscriptionExpiresAt) return "未开通";
     const expired = new Date(tenant.subscriptionExpiresAt).getTime() < Date.now();
     if (expired) return "已到期";
     const days = Math.ceil((new Date(tenant.subscriptionExpiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
@@ -619,7 +619,7 @@
     return badge({
       active: ["租用有效", "green"],
       expired: ["已到期", "red"],
-      unset: ["未设置", "orange"],
+      unset: ["未开通", "orange"],
     }, subscriptionStatusKey(tenant));
   }
 
