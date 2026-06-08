@@ -469,7 +469,7 @@ export function createReceivableSettlement(state, { user, itemId, txId, note = "
     throw badRequest(item.type === "receivable" ? "应收款只能使用入账流水平账" : "应付款只能使用出账流水平账");
   }
   const current = currentAnnotation(state, tx);
-  if (current) {
+  if (current && !canReuseRejectedAnnotationForSettlement(current)) {
     throw badRequest("该链上流水已有业务处理记录，不能直接平账");
   }
   if (state.receivableSettlements.some((entry) => entry.txId === tx.id && !["rejected", "revoked"].includes(entry.status))) {
@@ -1513,6 +1513,13 @@ function buildSettlementAnnotation(state, { user, tx, item, settlement, now }) {
     settlementType: type,
     createdAt: now,
   };
+}
+
+function canReuseRejectedAnnotationForSettlement(annotation) {
+  return annotation?.status === "rejected"
+    && !annotation.previousAnnotationId
+    && !annotation.settlementId
+    && !annotation.correctionType;
 }
 
 function migrateSettlementAnnotation(state, settlement) {

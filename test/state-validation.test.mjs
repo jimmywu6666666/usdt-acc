@@ -721,6 +721,22 @@ test("settlement rejection and revocation release the transaction for reprocessi
   assert.equal(receivable.status, "open");
 });
 
+test("rejected first annotation can be reused for receivable settlement", () => {
+  const state = ledgerState();
+  const annotation = annotate(state);
+  reviewAnnotation(state, { user: user(state, "sup"), annotationId: annotation.id, action: "reject", rejectionReason: "改走往来款平账" });
+  const tx = state.chainTransactions.find((item) => item.id === "tx");
+  tx.currentAnnotationId = annotation.id; // legacy/current UI state can still point at the rejected annotation.
+  const payable = createReceivablePayable(state, {
+    user: user(state, "sup"),
+    input: { type: "payable", counterparty: "供应商 A", amount: 800, category: "供应商货款", note: "订单 A" },
+  });
+  const settlement = createReceivableSettlement(state, { user: user(state, "emp"), itemId: payable.id, txId: tx.id });
+  assert.equal(settlement.status, "pending");
+  assert.equal(tx.currentAnnotationId, settlement.annotationId);
+  assert.equal(annotation.status, "rejected");
+});
+
 test("receivable settlement rejects wrong direction and historical transactions", () => {
   const state = ledgerState({
     wallets: [{ id: "wallet", tenantId: "tenant_alpha", alias: "主钱包", chain: "TRC20", address: "T123", enabled: true, managedFrom: "2026-06-06T00:00:00.000Z" }],

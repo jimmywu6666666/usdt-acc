@@ -537,14 +537,22 @@
   }
 
   function canSettleTransaction(tx) {
+    const annotation = currentAnnotation(tx);
     return ["admin", "employee", "supervisor"].includes(currentUser().role)
       && tenantBusinessActive()
       && tx.transactionType !== "transfer"
       && tx.internalTransferStatus !== "pending"
-      && !currentAnnotation(tx)
+      && (!annotation || canReuseRejectedAnnotationForSettlement(annotation))
       && isManagedTransaction(tx)
       && !isTxUsedForReceivable(tx.id)
       && receivablesForTransaction(tx).length > 0;
+  }
+
+  function canReuseRejectedAnnotationForSettlement(annotation) {
+    return annotation?.status === "rejected"
+      && !annotation.previousAnnotationId
+      && !annotation.settlementId
+      && !annotation.correctionType;
   }
 
   function isManagedTransaction(tx) {
@@ -2413,7 +2421,7 @@
           "提交往来款时可上传或粘贴凭证图片，方便主管审核业务来源和金额依据。",
           "平账从流水账目发起：先找到实际收款或付款的链上流水，再选择对应的应收款或应付款。",
           "入账流水只能平应收款，出账流水只能平应付款。",
-          "链上流水用于平账前必须没有当前有效批注；已经普通批注的流水需要先取消入账恢复待处理后，才能重新平账。",
+          "链上流水用于平账前不能有当前有效批注；首次普通批注被驳回后，也可以改为提交平账。",
           "纳入管理时间之前的历史无需批注流水不能用于平账。",
           "一笔链上流水只能绑定一笔往来款，且必须整笔用于平账，不能拆分或部分平账。",
           "一笔往来款可以通过多笔链上流水分多次平账。",
