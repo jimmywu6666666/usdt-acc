@@ -369,17 +369,34 @@ button {
 }
 
 .rp-stat-card {
-  border-left: 4px solid var(--line);
+  position: relative;
+  overflow: hidden;
 }
 
 .rp-stat-card.receivable {
-  border-left-color: var(--green);
+  border-color: #bfe8ce;
   background: #f8fffb;
 }
 
 .rp-stat-card.payable {
-  border-left-color: var(--red);
+  border-color: #f3c7c7;
   background: #fffafa;
+}
+
+.rp-stat-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: var(--line);
+}
+
+.rp-stat-card.receivable::before {
+  background: #45b26b;
+}
+
+.rp-stat-card.payable::before {
+  background: #dc6464;
 }
 
 .rp-stats .stat-card > span,
