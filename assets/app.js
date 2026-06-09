@@ -707,6 +707,7 @@
   }
 
   function subscriptionStatusText(tenant) {
+    if (tenant.demo) return "演示环境";
     if (!tenant.subscriptionExpiresAt) return "未开通";
     const expired = new Date(tenant.subscriptionExpiresAt).getTime() < Date.now();
     if (expired) return "已到期";
@@ -715,6 +716,7 @@
   }
 
   function subscriptionStatusKey(tenant) {
+    if (tenant.demo) return "active";
     if (!tenant.subscriptionExpiresAt) return "unset";
     return new Date(tenant.subscriptionExpiresAt).getTime() < Date.now() ? "expired" : "active";
   }
@@ -728,6 +730,7 @@
   }
 
   function tenantBusinessActive(tenant = currentTenant()) {
+    if (tenant.demo) return tenant.enabled !== false;
     return tenant.enabled !== false && subscriptionStatusKey(tenant) === "active";
   }
 
@@ -1608,6 +1611,10 @@
           </div>
         </section>
         <section class="panel">
+          <div class="panel-title"><h3>演示账号管理</h3><span>演示账号不需要登录密钥，每天可重置演示数据</span></div>
+          ${renderDemoAccountManagement()}
+        </section>
+        <section class="panel">
           <div class="panel-title"><h3>租户管理</h3><span>查看各系统状态、主管、钱包和流水规模</span></div>
           ${renderTenantManagement()}
         </section>
@@ -1657,6 +1664,43 @@
       <thead><tr><th>姓名</th><th>登录账号</th>${tenantColumn}<th>角色</th><th>登录密钥</th><th>查看全部账目</th><th>操作</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="${isAdmin ? 7 : 6}" class="empty">暂无账号</td></tr>`}</tbody>
     </table></div>`;
+  }
+
+  function renderDemoAccountManagement() {
+    const demoUsers = state.users.filter((user) => user.demo && user.role === "supervisor");
+    const today = dateInputValue(new Date());
+    const rows = demoUsers.map((user) => {
+      const tenant = state.tenants.find((item) => item.id === user.tenantId) || {};
+      const claims = (state.demoClaims || []).filter((claim) => claim.userId === user.id);
+      const todayClaim = claims.find((claim) => claim.dateKey === today);
+      const loggedToday = user.demoLastLoginAt && dateInputValue(user.demoLastLoginAt) === today;
+      const status = user.disabled || tenant.enabled === false ? ["已停用", "gray"] : loggedToday ? ["今日已登录", "green"] : todayClaim ? ["今日已领取", "amber"] : ["可领取", "blue"];
+      return `<tr>
+        <td>${escapeHtml(tenant.name || "-")}</td>
+        <td>${escapeHtml(user.loginName || "-")}</td>
+        <td>${badge({ s: status }, "s")}</td>
+        <td>${formatDate(todayClaim?.claimedAt)}</td>
+        <td>${formatDate(user.demoLastLoginAt)}</td>
+        <td>${formatDate(tenant.demoLastResetAt)}</td>
+        <td><div class="row-actions">
+          <button class="btn small" data-demo-reset="${user.id}">重置数据</button>
+          <button class="btn small ${user.disabled || tenant.enabled === false ? "primary" : "danger"}" data-demo-status="${user.id}" data-enabled="${user.disabled || tenant.enabled === false ? "true" : "false"}">${user.disabled || tenant.enabled === false ? "启用" : "停用"}</button>
+        </div></td>
+      </tr>`;
+    }).join("");
+    return `<div class="demo-management-layout">
+      <form id="demoAccountForm" class="form-grid demo-create-form">
+        <label>演示名称<input name="name" required placeholder="例如：演示客户 01"></label>
+        <label>登录账号<input name="loginName" required autocomplete="off" placeholder="例如：demo01"></label>
+        <label>登录密码<input name="password" required minlength="6" autocomplete="new-password" placeholder="至少 6 位"></label>
+        <div class="actions"><button class="btn primary" type="submit">新增演示账号</button></div>
+      </form>
+      <div class="notice">公开领取页：${renderCopyText(`${location.origin}/demo`, "演示账号领取页")}。账号当天领取或登录后不会再次分配。</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>演示系统</th><th>账号</th><th>状态</th><th>今日领取</th><th>最近登录</th><th>最近重置</th><th>操作</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="7" class="empty">暂无演示账号</td></tr>`}</tbody>
+      </table></div>
+    </div>`;
   }
 
   function renderProfile() {
@@ -1722,6 +1766,7 @@
     const keyword = String(accountFilters.keyword || "").trim();
     return state.users.filter((user) => {
       const tenant = user.tenantId ? state.tenants.find((item) => item.id === user.tenantId) : null;
+      if (user.demo || tenant?.demo) return false;
       if (accountFilters.role && accountFilters.role !== "all" && user.role !== accountFilters.role) return false;
       if (accountFilters.tenantStatus === "platform" && user.tenantId) return false;
       if (accountFilters.tenantStatus === "enabled" && (!tenant || tenant.enabled === false)) return false;
@@ -1829,7 +1874,7 @@
   }
 
   function renderSubscriptionTenants() {
-    const rows = state.tenants.map((tenant) => `<tr>
+    const rows = state.tenants.filter((tenant) => !tenant.demo).map((tenant) => `<tr>
       <td><strong>${escapeHtml(tenant.name)}</strong></td>
       <td>${formatDate(tenant.subscriptionExpiresAt)}</td>
       <td>${tenant.enabled ? badge({ on: ["启用", "green"] }, "on") : badge({ off: ["停用", "red"] }, "off")}</td>
@@ -2181,7 +2226,7 @@
   }
 
   function renderTenantManagement() {
-    const rows = state.tenants.map((tenant) => {
+    const rows = state.tenants.filter((tenant) => !tenant.demo).map((tenant) => {
       const users = state.users.filter((item) => item.tenantId === tenant.id);
       const wallets = state.wallets.filter((item) => item.tenantId === tenant.id);
       const transactions = state.chainTransactions.filter((item) => item.tenantId === tenant.id);
@@ -2759,6 +2804,9 @@
     });
     document.querySelector("#userForm")?.addEventListener("submit", submitUser);
     document.querySelector("#tenantForm")?.addEventListener("submit", submitTenant);
+    document.querySelector("#demoAccountForm")?.addEventListener("submit", submitDemoAccount);
+    document.querySelectorAll("[data-demo-reset]").forEach((button) => button.addEventListener("click", () => resetDemoAccount(button.dataset.demoReset)));
+    document.querySelectorAll("[data-demo-status]").forEach((button) => button.addEventListener("click", () => updateDemoAccountStatus(button.dataset.demoStatus, button.dataset.enabled === "true")));
     document.querySelectorAll("[data-tenant-status]").forEach((button) => button.addEventListener("click", () => {
       updateTenantStatus(button.dataset.tenantStatus, button.dataset.enabled === "true");
     }));
@@ -3549,6 +3597,49 @@
       render();
       toast("系统已开通，主管可使用登录账号和初始密码登录");
       showTotpSetup(payload.totpSetup);
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+
+  async function submitDemoAccount(event) {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(event.target).entries());
+    if (!confirm(`确认新增演示账号「${data.loginName || ""}」？系统会自动生成独立演示数据。`)) return;
+    try {
+      await apiMutate("/api/demo/accounts", { body: data });
+      render();
+      toast("演示账号已创建，无需登录密钥，可在 /demo 领取页分配");
+      alert(`演示账号已创建\n账号：${data.loginName}\n密码：${data.password}\n领取页：${location.origin}/demo`);
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+
+  async function resetDemoAccount(userId) {
+    const user = state.users.find((item) => item.id === userId);
+    if (!user) return;
+    if (!confirm(`确认重置演示账号「${user.loginName || user.name}」的数据？今天的领取和登录状态也会清空。`)) return;
+    try {
+      await apiMutate(`/api/demo/accounts/${encodeURIComponent(userId)}/reset`, { method: "POST" });
+      render();
+      toast("演示数据已重置");
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+
+  async function updateDemoAccountStatus(userId, enabled) {
+    const user = state.users.find((item) => item.id === userId);
+    if (!user) return;
+    if (!confirm(`${enabled ? "启用" : "停用"}演示账号「${user.loginName || user.name}」？`)) return;
+    try {
+      await apiMutate(`/api/demo/accounts/${encodeURIComponent(userId)}/status`, {
+        method: "PATCH",
+        body: { enabled },
+      });
+      render();
+      toast(enabled ? "演示账号已启用" : "演示账号已停用");
     } catch (error) {
       toast(error.message);
     }

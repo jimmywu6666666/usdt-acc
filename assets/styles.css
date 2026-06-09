@@ -2931,6 +2931,16 @@ tr:last-child td {
   box-shadow: 0 0 0 1px var(--line);
 }
 
+.demo-management-layout {
+  display: grid;
+  gap: 14px;
+}
+
+.demo-create-form {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+}
+
 .empty.slim {
   padding: 16px;
 }
@@ -3083,6 +3093,10 @@ tr:last-child td {
 
   .totp-qr {
     width: min(220px, 100%);
+  }
+
+  .demo-create-form {
+    grid-template-columns: 1fr;
   }
 
   .ticket-detail-meta {

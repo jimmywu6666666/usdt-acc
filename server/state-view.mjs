@@ -41,6 +41,7 @@ export function stateForUser(state, user) {
     walletEnabledLimit: Number(safeState.systemSettings?.walletEnabledLimit || 0),
   };
   safeState.users = tenantUsers;
+  safeState.demoClaims = [];
   safeState.wallets = safeState.wallets.filter((item) => item.tenantId === tenantId);
   safeState.walletBalanceSnapshots = (safeState.walletBalanceSnapshots || []).filter((item) => item.tenantId === tenantId);
   safeState.receivablePayables = (safeState.receivablePayables || []).filter((item) => item.tenantId === tenantId);

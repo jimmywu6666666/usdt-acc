@@ -2,9 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   autoCloseStaleSupportTickets,
+  claimDemoAccount,
   createAnnotation,
   createReceivablePayable,
   createReceivableSettlement,
+  createDemoAccount,
   createSupportTicket,
   createCategory,
   createEmployee,
@@ -31,6 +33,7 @@ import {
   resubmitAnnotation,
   resetUserPassword,
   resetUserTotp,
+  resetDemoTenantData,
   reviewAnnotation,
   reviewReceivablePayable,
   reviewReceivableSettlement,
@@ -574,6 +577,37 @@ test("users can reset their own password and login key only", () => {
   assert.ok(reset.totpSecret);
   assert.throws(() => resetUserPassword(state, { user: user(state, "emp"), userId: "other", password: "badpass123" }), /当前账号没有主管权限|没有操作该账号的权限/);
   assert.throws(() => resetUserTotp(state, { user: user(state, "emp"), userId: "other" }), /当前账号没有主管权限|没有操作该账号的权限/);
+});
+
+test("admin creates and resets claimable demo accounts without login keys", () => {
+  const state = ledgerState();
+  const created = createDemoAccount(state, {
+    user: user(state, "admin"),
+    input: { name: "演示客户 01", loginName: "demo01", password: "demo123456" },
+    now: "2026-06-09T01:00:00.000Z",
+  });
+  assert.equal(created.tenant.demo, true);
+  assert.equal(created.supervisor.demo, true);
+  assert.equal(created.supervisor.totpSecret, "");
+  assert.equal(created.supervisor.demoPassword, "demo123456");
+  assert.equal(state.chainTransactions.filter((tx) => tx.tenantId === created.tenant.id).length > 0, true);
+
+  const firstClaim = claimDemoAccount(state, {
+    now: "2026-06-09T02:00:00.000Z",
+    ip: "127.0.0.1",
+    userAgent: "node-test",
+  });
+  assert.equal(firstClaim.loginName, "demo01");
+  assert.equal(firstClaim.password, "demo123456");
+  assert.throws(() => claimDemoAccount(state, { now: "2026-06-09T03:00:00.000Z" }), /今日演示账号已领完/);
+
+  resetDemoTenantData(state, {
+    user: user(state, "admin"),
+    tenantId: created.tenant.id,
+    now: "2026-06-09T04:00:00.000Z",
+  });
+  const secondClaim = claimDemoAccount(state, { now: "2026-06-09T05:00:00.000Z" });
+  assert.equal(secondClaim.loginName, "demo01");
 });
 
 test("admin wallet enabled limit blocks new and re-enabled wallets", () => {

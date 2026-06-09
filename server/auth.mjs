@@ -54,7 +54,7 @@ export function verifyTotp(user, code, options = {}) {
 
 export function publicUser(user) {
   if (!user) return null;
-  const { passwordHash, totpSecret, ...safeUser } = user;
+  const { passwordHash, totpSecret, demoPassword, ...safeUser } = user;
   safeUser.totpEnabled = Boolean(totpSecret);
   return safeUser;
 }

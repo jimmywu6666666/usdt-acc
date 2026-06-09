@@ -36,6 +36,7 @@ export function migrateAnnotationState(state) {
   state.receivablePayables ||= [];
   state.receivableSettlements ||= [];
   state.supportTickets ||= [];
+  state.demoClaims ||= [];
   state.entries ||= [];
   state.legacyEntries ||= [];
   state.subscriptionSettings ||= {};
@@ -824,6 +825,115 @@ export function createTenant(state, { user, input, now = new Date().toISOString(
   return { tenant, supervisor };
 }
 
+export function createDemoAccount(state, { user, input, now = new Date().toISOString() }) {
+  assertAdmin(user);
+  state.demoClaims ||= [];
+  const label = String(input.name || input.label || "").trim() || `演示客户 ${(state.tenants || []).filter((tenant) => tenant.demo).length + 1}`;
+  const loginName = String(input.loginName || "").trim();
+  const password = String(input.password || "");
+  if (!loginName) throw badRequest("演示登录账号不能为空");
+  validateNewLogin(state, loginName, password);
+  const tenant = {
+    id: id("tenant_demo"),
+    name: label,
+    enabled: true,
+    demo: true,
+    subscriptionStatus: "demo",
+    subscriptionExpiresAt: "",
+    createdAt: now,
+    demoLastResetAt: now,
+  };
+  const supervisor = {
+    id: id("user_demo"),
+    tenantId: tenant.id,
+    name: `${label} 主管`,
+    loginName,
+    role: "supervisor",
+    canViewAll: true,
+    passwordHash: hashPassword(password),
+    demoPassword: password,
+    demo: true,
+    totpSecret: "",
+    createdAt: now,
+  };
+  state.tenants.push(tenant);
+  state.users.push(supervisor);
+  resetDemoTenantData(state, { user, tenantId: tenant.id, now, logAction: false });
+  appendLog(state, { tenantId: tenant.id, userId: user.id, action: "创建演示账号", target: `${label}:${loginName}`, createdAt: now });
+  return { tenant, supervisor };
+}
+
+export function resetDemoTenantData(state, { user, tenantId, now = new Date().toISOString(), logAction = true }) {
+  assertAdmin(user);
+  const tenant = state.tenants.find((item) => item.id === tenantId && item.demo);
+  if (!tenant) throw notFound("演示系统不存在");
+  removeTenantDemoData(state, tenant.id);
+  const supervisor = state.users.find((item) => item.tenantId === tenant.id && item.demo && item.role === "supervisor");
+  const employee = ensureDemoEmployee(state, tenant, now);
+  seedDemoTenantData(state, { tenant, supervisor, employee, now });
+  tenant.enabled = true;
+  tenant.subscriptionStatus = "demo";
+  tenant.demoLastResetAt = now;
+  state.demoClaims = (state.demoClaims || []).filter((claim) => claim.userId !== supervisor?.id);
+  if (supervisor) {
+    supervisor.demoClaimedAt = "";
+    supervisor.demoLastLoginAt = "";
+    supervisor.totpSecret = "";
+  }
+  if (logAction) appendLog(state, { tenantId: tenant.id, userId: user.id, action: "重置演示数据", target: tenant.name, createdAt: now });
+  return tenant;
+}
+
+export function updateDemoAccountStatus(state, { user, userId, enabled, now = new Date().toISOString() }) {
+  assertAdmin(user);
+  const demoUser = state.users.find((item) => item.id === userId && item.demo);
+  if (!demoUser) throw notFound("演示账号不存在");
+  demoUser.disabled = enabled !== true;
+  const tenant = state.tenants.find((item) => item.id === demoUser.tenantId && item.demo);
+  if (tenant) tenant.enabled = enabled === true;
+  appendLog(state, { tenantId: demoUser.tenantId, userId: user.id, action: demoUser.disabled ? "停用演示账号" : "启用演示账号", target: demoUser.loginName || demoUser.name, createdAt: now });
+  return demoUser;
+}
+
+export function claimDemoAccount(state, { now = new Date().toISOString(), ip = "", userAgent = "" } = {}) {
+  reconcileState(state);
+  state.demoClaims ||= [];
+  const today = chinaDateKey(now);
+  const claimedUserIds = new Set(state.demoClaims.filter((claim) => claim.dateKey === today).map((claim) => claim.userId));
+  const demoUsers = state.users.filter((item) => item.demo && item.role === "supervisor" && !item.disabled && item.demoPassword);
+  const available = demoUsers.find((item) => {
+    const tenant = state.tenants.find((candidate) => candidate.id === item.tenantId && candidate.demo && candidate.enabled);
+    if (!tenant) return false;
+    if (claimedUserIds.has(item.id)) return false;
+    if (item.demoLastLoginAt && chinaDateKey(item.demoLastLoginAt) === today) return false;
+    return true;
+  });
+  if (!available) throw badRequest("今日演示账号已领完，请联系工作人员获取。");
+  const tenant = state.tenants.find((item) => item.id === available.tenantId);
+  if (!tenant.demoLastResetAt || chinaDateKey(tenant.demoLastResetAt) !== today) {
+    resetDemoTenantData(state, { user: demoSystemUser(), tenantId: tenant.id, now, logAction: false });
+  }
+  available.demoClaimedAt = now;
+  const claim = {
+    id: id("demo_claim"),
+    userId: available.id,
+    tenantId: available.tenantId,
+    dateKey: today,
+    claimedAt: now,
+    ip,
+    userAgent: String(userAgent || "").slice(0, 240),
+  };
+  state.demoClaims.unshift(claim);
+  appendLog(state, { tenantId: available.tenantId, userId: "system_demo", action: "领取演示账号", target: available.loginName, createdAt: now });
+  return {
+    loginName: available.loginName,
+    password: available.demoPassword,
+    tenantName: tenant?.name || "",
+    claimedAt: now,
+    resetText: "演示数据每天自动重置，当天已登录账号不会再次分配。",
+  };
+}
+
 export function updateTenantStatus(state, { user, tenantId, enabled, now = new Date().toISOString() }) {
   assertAdmin(user);
   const tenant = state.tenants.find((item) => item.id === tenantId);
@@ -1442,6 +1552,7 @@ export function assertTenantSubscriptionActive(state, tenantId, now = new Date()
   const tenant = state.tenants.find((item) => item.id === tenantId);
   if (!tenant) throw forbidden("所属系统不存在");
   if (tenant.enabled === false) throw forbidden("当前系统已停用，不能进行业务操作");
+  if (tenant.demo) return tenant;
   if (!tenant.subscriptionExpiresAt) throw forbidden("当前系统租用未开通，请先完成租用续费");
   if (new Date(tenant.subscriptionExpiresAt).getTime() < new Date(now).getTime()) {
     throw forbidden("当前系统租用已到期，请先完成租用续费");
@@ -1784,6 +1895,217 @@ function addDays(date, days) {
 
 function categoryFallback(direction) {
   return direction === "income" ? "其他入账" : "其他出账";
+}
+
+function demoSystemUser() {
+  return { id: "system_demo", role: "admin", name: "演示系统" };
+}
+
+function chinaDateKey(value = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(value));
+}
+
+function removeTenantDemoData(state, tenantId) {
+  const keepTenant = (item) => item.tenantId !== tenantId || item.demo === true;
+  state.wallets = (state.wallets || []).filter((item) => item.tenantId !== tenantId);
+  state.chainTransactions = (state.chainTransactions || []).filter((item) => item.tenantId !== tenantId);
+  state.annotations = (state.annotations || []).filter((item) => item.tenantId !== tenantId);
+  state.receivablePayables = (state.receivablePayables || []).filter((item) => item.tenantId !== tenantId);
+  state.receivableSettlements = (state.receivableSettlements || []).filter((item) => item.tenantId !== tenantId);
+  state.supportTickets = (state.supportTickets || []).filter((item) => item.tenantId !== tenantId);
+  state.walletBalanceSnapshots = (state.walletBalanceSnapshots || []).filter((item) => item.tenantId !== tenantId);
+  state.auditLogs = (state.auditLogs || []).filter(keepTenant);
+}
+
+function ensureDemoEmployee(state, tenant, now) {
+  let employee = state.users.find((item) => item.tenantId === tenant.id && item.demo && item.role === "employee");
+  if (!employee) {
+    employee = {
+      id: id("user_demo_emp"),
+      tenantId: tenant.id,
+      name: `${tenant.name} 员工`,
+      loginName: `${tenant.id.slice(-6)}_emp`,
+      role: "employee",
+      canViewAll: true,
+      passwordHash: hashPassword("demo123456"),
+      demo: true,
+      totpSecret: "",
+      createdAt: now,
+    };
+    state.users.push(employee);
+  }
+  return employee;
+}
+
+function seedDemoTenantData(state, { tenant, supervisor, employee, now }) {
+  const todayStart = startOfLocalDay(new Date(now));
+  const at = (days, hour, minute = 0) => {
+    const date = addDays(todayStart, days);
+    date.setUTCHours(hour - 8, minute, 0, 0);
+    return date.toISOString();
+  };
+  const walletA = {
+    id: id("wallet_demo"),
+    tenantId: tenant.id,
+    alias: "演示收款钱包",
+    chain: "TRC20",
+    address: `TDEMO${cryptoRandom().padEnd(29, "X").slice(0, 29)}`,
+    enabled: true,
+    managedFrom: at(-30, 0),
+    chainBalance: 86520.35,
+    chainBalanceUpdatedAt: now,
+    lastSyncedAt: now,
+  };
+  const walletB = {
+    id: id("wallet_demo"),
+    tenantId: tenant.id,
+    alias: "演示付款钱包",
+    chain: "TRC20",
+    address: `TPAY${cryptoRandom().padEnd(31, "X").slice(0, 31)}`,
+    enabled: true,
+    managedFrom: at(-30, 0),
+    chainBalance: 32180.12,
+    chainBalanceUpdatedAt: now,
+    lastSyncedAt: now,
+  };
+  state.wallets.push(walletA, walletB);
+  const txs = [
+    demoTx(tenant.id, walletA.id, "income", 5200, at(0, 10, 20), "客户 A 到款", "approved"),
+    demoTx(tenant.id, walletB.id, "expense", 1800, at(0, 11, 5), "供应商 B 付款", "pending"),
+    demoTx(tenant.id, walletA.id, "income", 960, at(0, 13, 25), "待补业务说明", "unannotated"),
+    demoTx(tenant.id, walletB.id, "expense", 650, at(0, 15, 10), "测试手续费", "non_business"),
+    demoTx(tenant.id, walletA.id, "income", 1200, at(-1, 16, 40), "客户 C 回款", "rejected"),
+    demoTx(tenant.id, walletB.id, "expense", 2300, at(-3, 14, 35), "供应商 D 货款", "approved"),
+    demoTx(tenant.id, walletA.id, "income", 3000, at(-8, 9, 30), "平应收演示", "settlement"),
+  ];
+  state.chainTransactions.unshift(...txs);
+  for (const tx of txs) {
+    if (tx.demoStatus === "unannotated") continue;
+    const annotation = {
+      id: id("ann_demo"),
+      tenantId: tenant.id,
+      chainTxId: tx.id,
+      category: tx.direction === "income" ? "业务收入" : "业务支出",
+      note: tx.demoNote,
+      attachmentName: "",
+      attachment: null,
+      annotatedBy: tx.demoStatus === "non_business" ? supervisor?.id || employee.id : employee.id,
+      annotatedAt: tx.chainTime,
+      status: tx.demoStatus === "non_business" ? "non_business" : tx.demoStatus === "rejected" ? "rejected" : "approved",
+      reviewedBy: ["approved", "rejected"].includes(tx.demoStatus) ? supervisor?.id || employee.id : null,
+      reviewedAt: ["approved", "rejected"].includes(tx.demoStatus) ? tx.chainTime : null,
+      rejectionReason: tx.demoStatus === "rejected" ? "请补充客户合同编号和完整用途。" : "",
+      previousAnnotationId: null,
+      version: 1,
+      correctionType: null,
+      createdAt: tx.chainTime,
+      linkedChainTxIds: [tx.id],
+    };
+    state.annotations.push(annotation);
+    tx.currentAnnotationId = annotation.id;
+  }
+  const receivable = demoReceivable(tenant.id, employee.id, "receivable", "客户 E", 3000, "业务收入", at(-10, 10), "已审核应收款，已通过链上流水平账。", "approved");
+  const payable = demoReceivable(tenant.id, employee.id, "payable", "供应商 F", 1500, "业务支出", at(-2, 11), "待付款采购单。", "pending");
+  const partial = demoReceivable(tenant.id, employee.id, "receivable", "客户 G", 4800, "保证金", at(-4, 12), "部分到账，剩余待收。", "approved");
+  state.receivablePayables.push(receivable, payable, partial);
+  const settleTx = txs.find((tx) => tx.demoStatus === "settlement");
+  const settlement = {
+    id: id("rps_demo"),
+    tenantId: tenant.id,
+    itemId: receivable.id,
+    txId: settleTx.id,
+    amount: 3000,
+    note: "演示：整笔流水用于平应收款。",
+    attachmentName: "",
+    attachment: null,
+    status: "approved",
+    submittedBy: supervisor?.id || employee.id,
+    submittedAt: settleTx.chainTime,
+    reviewedBy: supervisor?.id || employee.id,
+    reviewedAt: settleTx.chainTime,
+    rejectionReason: "",
+  };
+  state.receivableSettlements.push(settlement);
+  const settleAnnotation = buildSettlementAnnotation(state, { user: supervisor || employee, tx: settleTx, item: receivable, settlement, now: settleTx.chainTime });
+  settlement.annotationId = settleAnnotation.id;
+  state.annotations.push(settleAnnotation);
+  settleTx.currentAnnotationId = settleAnnotation.id;
+  updateReceivablePayableStatus(state, receivable);
+  updateReceivablePayableStatus(state, payable);
+  updateReceivablePayableStatus(state, partial);
+  state.supportTickets.push({
+    id: id("ticket_demo"),
+    tenantId: tenant.id,
+    title: "演示工单：钱包同步时间咨询",
+    category: "wallet",
+    priority: "normal",
+    status: "waiting_admin",
+    createdBy: supervisor?.id || employee.id,
+    createdAt: at(0, 9, 50),
+    updatedAt: at(0, 9, 50),
+    messages: [{
+      id: id("msg_demo"),
+      userId: supervisor?.id || employee.id,
+      body: "请问链上钱包余额多久自动同步一次？",
+      createdAt: at(0, 9, 50),
+      attachmentName: "",
+      attachment: null,
+    }],
+  });
+  state.walletBalanceSnapshots.push(
+    { id: id("snap_demo"), tenantId: tenant.id, walletId: walletA.id, dateKey: chinaDateKey(now), balance: walletA.chainBalance, capturedAt: now },
+    { id: id("snap_demo"), tenantId: tenant.id, walletId: walletB.id, dateKey: chinaDateKey(now), balance: walletB.chainBalance, capturedAt: now },
+  );
+}
+
+function demoTx(tenantId, walletId, direction, amount, chainTime, note, demoStatus) {
+  return {
+    id: id("tx_demo"),
+    tenantId,
+    walletId,
+    hash: `${cryptoRandom()}${cryptoRandom()}${cryptoRandom()}`.slice(0, 64),
+    direction,
+    amount,
+    counterparty: `T${cryptoRandom().padEnd(33, "x").slice(0, 33)}`,
+    confirmed: true,
+    chainTime,
+    currentAnnotationId: null,
+    source: "demo",
+    createdAt: chainTime,
+    demo: true,
+    demoNote: note,
+    demoStatus,
+  };
+}
+
+function demoReceivable(tenantId, userId, type, counterparty, amount, category, createdAt, note, reviewStatus) {
+  return {
+    id: id("rp_demo"),
+    tenantId,
+    type,
+    counterparty,
+    amount,
+    category,
+    note,
+    dueDate: "",
+    attachmentName: "",
+    attachment: null,
+    status: "open",
+    reviewStatus,
+    rejectionReason: "",
+    createdBy: userId,
+    createdAt,
+    reviewedBy: reviewStatus === "approved" ? userId : null,
+    reviewedAt: reviewStatus === "approved" ? createdAt : null,
+    settledAmount: 0,
+    remainingAmount: amount,
+    overAmount: 0,
+  };
 }
 
 function annotationStatus(annotation) {

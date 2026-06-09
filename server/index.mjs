@@ -11,7 +11,9 @@ import {
   assertAdmin,
   assertSupervisorOrAdmin,
   autoCloseStaleSupportTickets,
+  claimDemoAccount,
   createCategory,
+  createDemoAccount,
   createEmployee,
   createAnnotation,
   createReceivablePayable,
@@ -39,6 +41,7 @@ import {
   resubmitAnnotation,
   resetUserPassword,
   resetUserTotp,
+  resetDemoTenantData,
   reviewAnnotation,
   reviewReceivablePayable,
   reviewReceivableSettlement,
@@ -49,6 +52,7 @@ import {
   updateSystemSettings,
   updateSupportTicketStatus,
   updateCategory,
+  updateDemoAccountStatus,
   updateEmployeePermission,
   updateTenantStatus,
   updateWalletManagedFrom,
@@ -209,6 +213,24 @@ async function handleApi(req, res, pathname) {
     return;
   }
 
+  if (pathname === "/api/demo/claim" && req.method === "POST") {
+    let claim = null;
+    await storage.mutateState(async (current) => {
+      if (!current) {
+        const error = new Error("系统状态尚未初始化");
+        error.statusCode = 404;
+        throw error;
+      }
+      claim = claimDemoAccount(current, {
+        ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress || "",
+        userAgent: req.headers["user-agent"] || "",
+      });
+      return current;
+    });
+    respond(200, { ok: true, claim, loginUrl: "/" });
+    return;
+  }
+
   if (pathname === "/api/auth/login" && req.method === "POST") {
     const state = await storage.readState();
     if (!state) {
@@ -231,7 +253,7 @@ async function handleApi(req, res, pathname) {
       error.statusCode = 401;
       throw error;
     }
-    if (user.totpSecret && !verifyTotp(user, body.totpCode || body.totp || "")) {
+    if (user.totpSecret && !user.demo && !verifyTotp(user, body.totpCode || body.totp || "")) {
       appendLog(state, {
         tenantId: user.tenantId || null,
         userId: user.id,
@@ -243,7 +265,14 @@ async function handleApi(req, res, pathname) {
       error.statusCode = 401;
       throw error;
     }
+    if (user.demo && user.tenantId) {
+      const tenant = state.tenants.find((item) => item.id === user.tenantId && item.demo);
+      if (tenant && (!tenant.demoLastResetAt || chinaDateKey(tenant.demoLastResetAt) !== chinaDateKey(new Date()))) {
+        resetDemoTenantData(state, { user: { id: "system_demo", role: "admin", name: "演示系统" }, tenantId: tenant.id, logAction: false });
+      }
+    }
     appendLog(state, { tenantId: user.tenantId || null, userId: user.id, action: "登录系统", target: user.name });
+    if (user.demo) user.demoLastLoginAt = new Date().toISOString();
     await storage.writeState?.(state);
     const token = await createSession(storage, user);
     responseUser = user;
@@ -630,6 +659,43 @@ async function handleApi(req, res, pathname) {
     return;
   }
 
+  if (pathname === "/api/demo/accounts" && req.method === "POST") {
+    const body = await readJsonBody(req);
+    let created = null;
+    const state = await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      created = createDemoAccount(current, { user, input: body });
+      return current;
+    });
+    respond(200, { ok: true, state, demoAccount: { userId: created?.supervisor?.id, tenantId: created?.tenant?.id } });
+    return;
+  }
+
+  const demoReset = pathname.match(/^\/api\/demo\/accounts\/([^/]+)\/reset$/);
+  if (demoReset && req.method === "POST") {
+    const state = await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      const demoUser = current.users.find((item) => item.id === demoReset[1] && item.demo);
+      if (!demoUser) throw Object.assign(new Error("演示账号不存在"), { statusCode: 404 });
+      resetDemoTenantData(current, { user, tenantId: demoUser.tenantId });
+      return current;
+    });
+    respond(200, { ok: true, state });
+    return;
+  }
+
+  const demoStatus = pathname.match(/^\/api\/demo\/accounts\/([^/]+)\/status$/);
+  if (demoStatus && req.method === "PATCH") {
+    const body = await readJsonBody(req);
+    const state = await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      updateDemoAccountStatus(current, { user, userId: demoStatus[1], enabled: body.enabled === true });
+      return current;
+    });
+    respond(200, { ok: true, state });
+    return;
+  }
+
   const resetTotp = pathname.match(/^\/api\/users\/([^/]+)\/totp$/);
   if (resetTotp && req.method === "PATCH") {
     let targetUser = null;
@@ -942,16 +1008,17 @@ function normalizeLoginName(value) {
 }
 
 async function serveStatic(req, res, pathname) {
-  const safePath = pathname === "/" ? "/index.html" : decodeURIComponent(pathname);
-  if (safePath !== "/index.html" && !safePath.startsWith("/assets/")) {
+  const decodedPath = decodeURIComponent(pathname);
+  const safePath = pathname === "/" ? "/index.html" : decodedPath === "/demo" ? "/demo.html" : decodedPath;
+  if (!["/index.html", "/demo.html"].includes(safePath) && !safePath.startsWith("/assets/")) {
     res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
     res.end("Not Found");
     return;
   }
   const filePath = path.resolve(rootDir, `.${safePath}`);
   const assetsDir = path.join(rootDir, "assets");
-  const validPath = safePath === "/index.html"
-    ? filePath === path.join(rootDir, "index.html")
+  const validPath = ["/index.html", "/demo.html"].includes(safePath)
+    ? filePath === path.join(rootDir, safePath.slice(1))
     : filePath.startsWith(`${assetsDir}${path.sep}`);
   if (!validPath) {
     res.writeHead(403);
@@ -1197,6 +1264,15 @@ function startOfChinaDay(date) {
   }).formatToParts(date);
   const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return new Date(`${values.year}-${values.month}-${values.day}T00:00:00+08:00`);
+}
+
+function chinaDateKey(date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(date));
 }
 
 function startOfChinaMonth(date) {
