@@ -3337,14 +3337,16 @@
 
   function showTotpSetup(setup) {
     if (!setup?.secret) return;
+    const qrSvg = setup.otpauthUrl ? renderQrCodeSvg(setup.otpauthUrl) : "";
     const overlay = createFormModal({
       title: "登录密钥绑定信息",
-      desc: "请将以下密钥添加到 Google Authenticator、Microsoft Authenticator 等验证器；关闭后页面不再显示完整密钥。",
+      desc: "请使用 Google Authenticator、Microsoft Authenticator 等验证器扫描二维码；关闭后页面不再显示完整密钥。",
       body: `
         <section class="annotation-modal-summary">
           <div><span>登录账号</span><strong>${escapeHtml(setup.loginName || "-")}</strong></div>
+          ${qrSvg ? `<div class="wide totp-qr-wrap"><span>扫码绑定</span>${qrSvg}</div>` : ""}
           <div class="wide"><span>密钥</span><strong class="mono">${escapeHtml(setup.secret)}</strong></div>
-          <div class="wide"><span>扫码链接</span><strong class="mono">${escapeHtml(setup.otpauthUrl || "-")}</strong></div>
+          <div class="wide"><span>备用链接</span><strong class="mono">${escapeHtml(setup.otpauthUrl || "-")}</strong></div>
         </section>
         <p class="form-hint">绑定后，该账号登录时除账号密码外，还需要输入验证器里的 6 位动态验证码。</p>
       `,
@@ -3352,6 +3354,190 @@
       onSubmit: async (_, close) => close(),
     });
     document.body.append(overlay);
+  }
+
+  function renderQrCodeSvg(text) {
+    try {
+      const modules = buildQrCodeModules(text);
+      const quiet = 4;
+      const size = modules.length + quiet * 2;
+      const cells = [];
+      for (let y = 0; y < modules.length; y += 1) {
+        for (let x = 0; x < modules.length; x += 1) {
+          if (modules[y][x]) cells.push(`M${x + quiet},${y + quiet}h1v1h-1z`);
+        }
+      }
+      return `<svg class="totp-qr" viewBox="0 0 ${size} ${size}" role="img" aria-label="登录密钥二维码" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><path d="${cells.join("")}" fill="#0f172a"/></svg>`;
+    } catch (error) {
+      console.error(error);
+      return "";
+    }
+  }
+
+  function buildQrCodeModules(text) {
+    const version = 15;
+    const size = version * 4 + 17;
+    const dataCodewords = 523;
+    const eccLength = 22;
+    const data = qrEncodeData(text, dataCodewords);
+    const blocks = [
+      data.slice(0, 87),
+      data.slice(87, 174),
+      data.slice(174, 261),
+      data.slice(261, 348),
+      data.slice(348, 435),
+      data.slice(435, 523),
+    ];
+    const eccBlocks = blocks.map((block) => qrReedSolomonRemainder(block, eccLength));
+    const codewords = [];
+    for (let i = 0; i < 88; i += 1) {
+      for (const block of blocks) if (i < block.length) codewords.push(block[i]);
+    }
+    for (let i = 0; i < eccLength; i += 1) {
+      for (const ecc of eccBlocks) codewords.push(ecc[i]);
+    }
+
+    const modules = Array.from({ length: size }, () => Array(size).fill(false));
+    const reserved = Array.from({ length: size }, () => Array(size).fill(false));
+    const set = (x, y, dark = false) => {
+      if (x < 0 || y < 0 || x >= size || y >= size) return;
+      modules[y][x] = dark;
+      reserved[y][x] = true;
+    };
+    const finder = (x, y) => {
+      for (let dy = -1; dy <= 7; dy += 1) {
+        for (let dx = -1; dx <= 7; dx += 1) {
+          const xx = x + dx;
+          const yy = y + dy;
+          const dark = dx >= 0 && dx <= 6 && dy >= 0 && dy <= 6
+            && (dx === 0 || dx === 6 || dy === 0 || dy === 6 || (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4));
+          set(xx, yy, dark);
+        }
+      }
+    };
+    finder(0, 0);
+    finder(size - 7, 0);
+    finder(0, size - 7);
+    for (let i = 8; i < size - 8; i += 1) {
+      set(i, 6, i % 2 === 0);
+      set(6, i, i % 2 === 0);
+    }
+    for (const cy of [6, 26, 48, 70]) {
+      for (const cx of [6, 26, 48, 70]) {
+        if ((cx === 6 && cy === 6) || (cx === 70 && cy === 6) || (cx === 6 && cy === 70)) continue;
+        for (let dy = -2; dy <= 2; dy += 1) {
+          for (let dx = -2; dx <= 2; dx += 1) {
+            set(cx + dx, cy + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+          }
+        }
+      }
+    }
+    set(8, size - 8, true);
+    for (let i = 0; i < 9; i += 1) {
+      if (i !== 6) {
+        set(8, i, false);
+        set(i, 8, false);
+      }
+    }
+    for (let i = 0; i < 8; i += 1) {
+      set(size - 1 - i, 8, false);
+      set(8, size - 1 - i, false);
+    }
+
+    const bits = [];
+    for (const codeword of codewords) {
+      for (let i = 7; i >= 0; i -= 1) bits.push(((codeword >>> i) & 1) === 1);
+    }
+    let bitIndex = 0;
+    let upward = true;
+    for (let right = size - 1; right >= 1; right -= 2) {
+      if (right === 6) right -= 1;
+      for (let vert = 0; vert < size; vert += 1) {
+        const y = upward ? size - 1 - vert : vert;
+        for (let j = 0; j < 2; j += 1) {
+          const x = right - j;
+          if (!reserved[y][x]) {
+            modules[y][x] = bitIndex < bits.length ? bits[bitIndex] : false;
+            reserved[y][x] = false;
+            bitIndex += 1;
+          }
+        }
+      }
+      upward = !upward;
+    }
+    const mask = 0;
+    for (let y = 0; y < size; y += 1) {
+      for (let x = 0; x < size; x += 1) {
+        if (!reserved[y][x] && (x + y) % 2 === 0) modules[y][x] = !modules[y][x];
+      }
+    }
+    drawFormatBits(modules, mask);
+    return modules;
+  }
+
+  function qrEncodeData(text, dataCodewords) {
+    const bytes = Array.from(new TextEncoder().encode(text));
+    const bits = [];
+    const append = (value, length) => {
+      for (let i = length - 1; i >= 0; i -= 1) bits.push((value >>> i) & 1);
+    };
+    append(0x4, 4);
+    append(bytes.length, 16);
+    for (const byte of bytes) append(byte, 8);
+    const maxBits = dataCodewords * 8;
+    if (bits.length > maxBits) throw new Error("登录密钥链接过长，无法生成二维码");
+    for (let i = 0; i < 4 && bits.length < maxBits; i += 1) bits.push(0);
+    while (bits.length % 8) bits.push(0);
+    const data = [];
+    for (let i = 0; i < bits.length; i += 8) data.push(Number.parseInt(bits.slice(i, i + 8).join(""), 2));
+    for (let pad = 0xec; data.length < dataCodewords; pad ^= 0xec ^ 0x11) data.push(pad);
+    return data;
+  }
+
+  function qrReedSolomonRemainder(data, degree) {
+    const generator = [];
+    for (let i = 0; i < degree - 1; i += 1) generator.push(0);
+    generator.push(1);
+    for (let i = 0, root = 1; i < degree; i += 1, root = qrGfMultiply(root, 2)) {
+      for (let j = 0; j < generator.length; j += 1) {
+        generator[j] = qrGfMultiply(generator[j], root);
+        if (j + 1 < generator.length) generator[j] ^= generator[j + 1];
+      }
+    }
+    const result = Array(degree).fill(0);
+    for (const byte of data) {
+      const factor = byte ^ result.shift();
+      result.push(0);
+      for (let i = 0; i < degree; i += 1) result[i] ^= qrGfMultiply(generator[i], factor);
+    }
+    return result;
+  }
+
+  function qrGfMultiply(left, right) {
+    let result = 0;
+    for (let i = 7; i >= 0; i -= 1) {
+      result = (result << 1) ^ ((result >>> 7) * 0x11d);
+      if (((right >>> i) & 1) !== 0) result ^= left;
+    }
+    return result & 0xff;
+  }
+
+  function drawFormatBits(modules, mask) {
+    const size = modules.length;
+    let data = (1 << 3) | mask; // Error correction level L.
+    let rem = data;
+    for (let i = 0; i < 10; i += 1) rem = (rem << 1) ^ (((rem >>> 9) & 1) * 0x537);
+    const bits = ((data << 10) | rem) ^ 0x5412;
+    const bit = (i) => ((bits >>> i) & 1) !== 0;
+    const set = (x, y, dark) => { modules[y][x] = dark; };
+    for (let i = 0; i <= 5; i += 1) set(8, i, bit(i));
+    set(8, 7, bit(6));
+    set(8, 8, bit(7));
+    set(7, 8, bit(8));
+    for (let i = 9; i < 15; i += 1) set(14 - i, 8, bit(i));
+    for (let i = 0; i < 8; i += 1) set(size - 1 - i, 8, bit(i));
+    for (let i = 8; i < 15; i += 1) set(8, size - 15 + i, bit(i));
+    set(8, size - 8, true);
   }
 
   async function submitTenant(event) {

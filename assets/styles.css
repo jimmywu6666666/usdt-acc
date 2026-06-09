@@ -2916,6 +2916,21 @@ tr:last-child td {
   color: #1d4ed8;
 }
 
+.totp-qr-wrap {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+
+.totp-qr {
+  width: min(240px, 100%);
+  max-width: 240px;
+  border: 8px solid #fff;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--line);
+}
+
 .empty.slim {
   padding: 16px;
 }
@@ -3064,6 +3079,10 @@ tr:last-child td {
 
   .annotation-modal-summary .hash {
     grid-column: 1 / -1;
+  }
+
+  .totp-qr {
+    width: min(220px, 100%);
   }
 
   .ticket-detail-meta {
