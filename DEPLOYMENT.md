@@ -30,7 +30,7 @@
 ## 服务管理
 
 ```bash
-ssh -i ~/.ssh/usdt_ledger_prod root@149.28.24.80
+ssh -p 22022 -i ~/.ssh/usdt_ledger_prod -o IdentitiesOnly=yes root@acc.ziheexin.net
 systemctl status usdt-ledger
 journalctl -u usdt-ledger -f
 systemctl restart usdt-ledger
