@@ -50,7 +50,7 @@
 node server/index.mjs
 ```
 
-打开 `http://localhost:5173`。演示账号默认密码为 `123456`。
+打开 `http://localhost:5173`。演示账号可由管理员在账号管理中创建，并通过 `/demo` 公开领取页分配。
 
 配置 PostgreSQL 和 TRON：
 
