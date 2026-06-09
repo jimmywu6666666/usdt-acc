@@ -2954,6 +2954,39 @@ tr:last-child td {
   color: #1d4ed8;
 }
 
+.account-delivery-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.account-delivery-field {
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.account-delivery-value {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.account-delivery-value strong {
+  flex: 1 1 auto;
+  margin-top: 0;
+}
+
+.account-delivery-value .btn {
+  flex: 0 0 auto;
+}
+
+.account-delivery-all {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .totp-qr-wrap {
   display: grid;
   justify-items: center;
@@ -3127,6 +3160,19 @@ tr:last-child td {
 
   .annotation-modal-summary .hash {
     grid-column: 1 / -1;
+  }
+
+  .account-delivery-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .account-delivery-value {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .account-delivery-all {
+    display: grid;
   }
 
   .totp-qr {
