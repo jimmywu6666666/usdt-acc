@@ -92,6 +92,7 @@
       }
       .login-link {
         display: block;
+        border: 0;
         padding: 13px;
         border-radius: 8px;
         background: #117f72;
@@ -99,6 +100,12 @@
         text-align: center;
         text-decoration: none;
         font-weight: 900;
+      }
+      .demo-login-hint {
+        color: #66758a;
+        font-size: 13px;
+        font-weight: 800;
+        text-align: center;
       }
       .error {
         display: none;
@@ -147,6 +154,7 @@
       const escapeHtml = (value) => String(value || "").replace(/[&<>"']/g, (char) => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;",
       }[char]));
+      let currentClaim = null;
       button.addEventListener("click", async () => {
         button.disabled = true;
         button.textContent = "正在分配...";
@@ -161,14 +169,16 @@
           const payload = await response.json();
           if (!response.ok) throw new Error(payload.error || "领取失败");
           const claim = payload.claim;
+          currentClaim = claim;
           result.innerHTML = `
             <div class="row"><span>演示系统</span><strong>${escapeHtml(claim.tenantName)}</strong></div>
             <div class="row"><span>登录账号</span><strong>${escapeHtml(claim.loginName)}</strong></div>
             <div class="row"><span>登录密码</span><strong>${escapeHtml(claim.password)}</strong></div>
-            <p class="sub">${escapeHtml(claim.resetText)}</p>
-            <a class="login-link" href="${escapeHtml(payload.loginUrl || "/")}">前往登录</a>
+            <button class="login-link" type="button" id="demoLoginBtn">进入演示系统</button>
+            <p class="demo-login-hint">演示账号无需动态验证码。</p>
           `;
           result.classList.add("show");
+          document.querySelector("#demoLoginBtn").addEventListener("click", loginDemoAccount);
           button.textContent = "已领取";
         } catch (err) {
           error.textContent = err.message || "领取失败";
@@ -177,6 +187,36 @@
           button.textContent = "重新领取";
         }
       });
+
+      async function loginDemoAccount() {
+        if (!currentClaim) return;
+        const loginButton = document.querySelector("#demoLoginBtn");
+        loginButton.disabled = true;
+        loginButton.textContent = "正在进入...";
+        error.classList.remove("show");
+        try {
+          const response = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              loginName: currentClaim.loginName,
+              password: currentClaim.password,
+            }),
+          });
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.error || "登录失败");
+          localStorage.setItem("usdt-ledger-session:v1", JSON.stringify({
+            token: payload.token,
+            userId: payload.user?.id,
+          }));
+          window.location.href = "/";
+        } catch (err) {
+          error.textContent = err.message || "登录失败";
+          error.classList.add("show");
+          loginButton.disabled = false;
+          loginButton.textContent = "进入演示系统";
+        }
+      }
     </script>
   </body>
 </html>
