@@ -1119,32 +1119,70 @@ button {
 }
 
 .user-table {
-  min-width: 560px;
+  min-width: 980px;
+  table-layout: fixed;
 }
 
 .user-table th,
 .user-table td {
   vertical-align: middle;
+  word-break: normal;
 }
 
 .user-table th:nth-child(1),
 .user-table td:nth-child(1) {
-  width: 30%;
+  width: 15%;
 }
 
 .user-table th:nth-child(2),
 .user-table td:nth-child(2) {
-  width: 18%;
+  width: 15%;
 }
 
 .user-table th:nth-child(3),
 .user-table td:nth-child(3) {
-  width: 24%;
+  width: 18%;
 }
 
 .user-table th:nth-child(4),
 .user-table td:nth-child(4) {
-  width: 28%;
+  width: 10%;
+}
+
+.user-table th:nth-child(5),
+.user-table td:nth-child(5) {
+  width: 11%;
+}
+
+.user-table th:nth-child(6),
+.user-table td:nth-child(6) {
+  width: 11%;
+}
+
+.user-table th:nth-child(7),
+.user-table td:nth-child(7) {
+  width: 20%;
+}
+
+.user-table th:nth-last-child(3),
+.user-table td:nth-last-child(3),
+.user-table th:nth-last-child(2),
+.user-table td:nth-last-child(2) {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.user-table th:last-child,
+.user-table td:last-child {
+  width: 22%;
+  min-width: 190px;
+}
+
+.user-table .row-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 190px;
 }
 
 .user-table .checkline.compact {
