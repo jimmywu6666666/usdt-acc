@@ -34,6 +34,7 @@ import {
   resetUserPassword,
   resetUserTotp,
   resetDemoTenantData,
+  resetStaleDemoTenants,
   reviewAnnotation,
   reviewReceivablePayable,
   reviewReceivableSettlement,
@@ -655,6 +656,32 @@ test("admin creates and resets claimable demo accounts without login keys", () =
   });
   const secondClaim = claimDemoAccount(state, { now: "2026-06-09T05:00:00.000Z" });
   assert.equal(secondClaim.loginName, "demo01");
+});
+
+test("stale demo tenants reset when state is viewed on a new day", () => {
+  const state = ledgerState();
+  const created = createDemoAccount(state, {
+    user: user(state, "admin"),
+    input: { name: "演示客户 02", loginName: "demo02", password: "demo123456" },
+    now: "2026-06-09T01:00:00.000Z",
+  });
+  const claim = claimDemoAccount(state, {
+    now: "2026-06-09T02:00:00.000Z",
+    ip: "127.0.0.8",
+    claimToken: "browser-reset",
+  });
+  assert.equal(claim.loginName, "demo02");
+  assert.equal(state.demoClaims.length, 1);
+  assert.equal(created.tenant.demoLastResetAt.startsWith("2026-06-09"), true);
+
+  const resetIds = resetStaleDemoTenants(state, { now: "2026-06-10T01:00:00.000Z" });
+  assert.deepEqual(resetIds, [created.tenant.id]);
+  assert.equal(created.tenant.demoLastResetAt.startsWith("2026-06-10"), true);
+  assert.equal(state.demoClaims.length, 0);
+  assert.equal(state.users.find((item) => item.id === created.supervisor.id).demoClaimedAt, "");
+
+  const repeated = resetStaleDemoTenants(state, { now: "2026-06-10T02:00:00.000Z" });
+  assert.deepEqual(repeated, []);
 });
 
 test("admin wallet enabled limit blocks new and re-enabled wallets", () => {

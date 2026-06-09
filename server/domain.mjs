@@ -884,6 +884,20 @@ export function resetDemoTenantData(state, { user, tenantId, now = new Date().to
   return tenant;
 }
 
+export function resetStaleDemoTenants(state, { user = demoSystemUser(), now = new Date().toISOString(), logAction = false } = {}) {
+  assertAdmin(user);
+  reconcileState(state);
+  const today = chinaDateKey(now);
+  const resetTenantIds = [];
+  for (const tenant of state.tenants || []) {
+    if (!tenant.demo) continue;
+    if (tenant.demoLastResetAt && chinaDateKey(tenant.demoLastResetAt) === today) continue;
+    resetDemoTenantData(state, { user, tenantId: tenant.id, now, logAction });
+    resetTenantIds.push(tenant.id);
+  }
+  return resetTenantIds;
+}
+
 export function updateDemoAccountStatus(state, { user, userId, enabled, now = new Date().toISOString() }) {
   assertAdmin(user);
   const demoUser = state.users.find((item) => item.id === userId && item.demo);

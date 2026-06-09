@@ -42,6 +42,7 @@ import {
   resetUserPassword,
   resetUserTotp,
   resetDemoTenantData,
+  resetStaleDemoTenants,
   reviewAnnotation,
   reviewReceivablePayable,
   reviewReceivableSettlement,
@@ -298,7 +299,11 @@ async function handleApi(req, res, pathname) {
     }
     reconcileState(state);
     const { user } = await authenticate(state);
-    if (autoCloseStaleSupportTickets(state).length) await storage.writeState(state);
+    const changed = [
+      ...autoCloseStaleSupportTickets(state),
+      ...resetStaleDemoTenants(state),
+    ];
+    if (changed.length) await storage.writeState(state);
     state.activeUserId = user.id;
     if (user.tenantId) state.activeTenantId = user.tenantId;
     respond(200, { state });
