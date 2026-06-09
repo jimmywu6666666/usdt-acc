@@ -895,16 +895,34 @@ export function updateDemoAccountStatus(state, { user, userId, enabled, now = ne
   return demoUser;
 }
 
-export function claimDemoAccount(state, { now = new Date().toISOString(), ip = "", userAgent = "" } = {}) {
+export function claimDemoAccount(state, { now = new Date().toISOString(), ip = "", userAgent = "", claimToken = "" } = {}) {
   reconcileState(state);
   state.demoClaims ||= [];
   const today = chinaDateKey(now);
-  const claimedUserIds = new Set(state.demoClaims.filter((claim) => claim.dateKey === today).map((claim) => claim.userId));
+  const nowMs = new Date(now).getTime();
+  const activeClaimMs = 30 * 60 * 1000;
   const demoUsers = state.users.filter((item) => item.demo && item.role === "supervisor" && !item.disabled && item.demoPassword);
+  const usableClaim = (claim) => {
+    if (!claim || claim.dateKey !== today) return false;
+    const user = demoUsers.find((item) => item.id === claim.userId);
+    if (!user) return false;
+    if (user.demoLastLoginAt && chinaDateKey(user.demoLastLoginAt) === today) return false;
+    const age = nowMs - new Date(claim.claimedAt).getTime();
+    return age >= 0 && age <= activeClaimMs;
+  };
+  const normalizedToken = String(claimToken || "").trim().slice(0, 120);
+  const normalizedIp = String(ip || "").split(",")[0].trim();
+  const reusable = state.demoClaims.find((claim) => usableClaim(claim) && (
+    (normalizedToken && claim.claimToken === normalizedToken)
+    || (!normalizedToken && normalizedIp && claim.ip === normalizedIp)
+  )) || state.demoClaims.find((claim) => usableClaim(claim) && normalizedIp && claim.ip === normalizedIp);
+  if (reusable) return demoClaimForClient(state, reusable, now);
+
+  const activeClaimedUserIds = new Set(state.demoClaims.filter(usableClaim).map((claim) => claim.userId));
   const available = demoUsers.find((item) => {
     const tenant = state.tenants.find((candidate) => candidate.id === item.tenantId && candidate.demo && candidate.enabled);
     if (!tenant) return false;
-    if (claimedUserIds.has(item.id)) return false;
+    if (activeClaimedUserIds.has(item.id)) return false;
     if (item.demoLastLoginAt && chinaDateKey(item.demoLastLoginAt) === today) return false;
     return true;
   });
@@ -920,16 +938,23 @@ export function claimDemoAccount(state, { now = new Date().toISOString(), ip = "
     tenantId: available.tenantId,
     dateKey: today,
     claimedAt: now,
-    ip,
+    ip: normalizedIp,
+    claimToken: normalizedToken,
     userAgent: String(userAgent || "").slice(0, 240),
   };
   state.demoClaims.unshift(claim);
   appendLog(state, { tenantId: available.tenantId, userId: "system_demo", action: "领取演示账号", target: available.loginName, createdAt: now });
+  return demoClaimForClient(state, claim, now);
+}
+
+function demoClaimForClient(state, claim, now) {
+  const user = state.users.find((item) => item.id === claim.userId);
+  const tenant = state.tenants.find((item) => item.id === claim.tenantId);
   return {
-    loginName: available.loginName,
-    password: available.demoPassword,
+    loginName: user?.loginName || "",
+    password: user?.demoPassword || "",
     tenantName: tenant?.name || "",
-    claimedAt: now,
+    claimedAt: claim.claimedAt || now,
     resetText: "演示数据每天自动重置，当天已登录账号不会再次分配。",
   };
 }

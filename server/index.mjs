@@ -214,6 +214,7 @@ async function handleApi(req, res, pathname) {
   }
 
   if (pathname === "/api/demo/claim" && req.method === "POST") {
+    const body = await readJsonBody(req).catch(() => ({}));
     let claim = null;
     await storage.mutateState(async (current) => {
       if (!current) {
@@ -224,6 +225,7 @@ async function handleApi(req, res, pathname) {
       claim = claimDemoAccount(current, {
         ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress || "",
         userAgent: req.headers["user-agent"] || "",
+        claimToken: body.claimToken || "",
       });
       return current;
     });

@@ -136,6 +136,14 @@
       const button = document.querySelector("#claimBtn");
       const result = document.querySelector("#result");
       const error = document.querySelector("#error");
+      const CLAIM_TOKEN_KEY = "usdt-ledger-demo-claim-token";
+      const claimToken = (() => {
+        const existing = localStorage.getItem(CLAIM_TOKEN_KEY);
+        if (existing) return existing;
+        const next = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+        localStorage.setItem(CLAIM_TOKEN_KEY, next);
+        return next;
+      })();
       const escapeHtml = (value) => String(value || "").replace(/[&<>"']/g, (char) => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;",
       }[char]));
@@ -145,7 +153,11 @@
         error.classList.remove("show");
         result.classList.remove("show");
         try {
-          const response = await fetch("/api/demo/claim", { method: "POST" });
+          const response = await fetch("/api/demo/claim", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ claimToken }),
+          });
           const payload = await response.json();
           if (!response.ok) throw new Error(payload.error || "领取失败");
           const claim = payload.claim;

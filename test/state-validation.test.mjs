@@ -596,10 +596,27 @@ test("admin creates and resets claimable demo accounts without login keys", () =
     now: "2026-06-09T02:00:00.000Z",
     ip: "127.0.0.1",
     userAgent: "node-test",
+    claimToken: "browser-a",
   });
   assert.equal(firstClaim.loginName, "demo01");
   assert.equal(firstClaim.password, "demo123456");
-  assert.throws(() => claimDemoAccount(state, { now: "2026-06-09T03:00:00.000Z" }), /今日演示账号已领完/);
+  const repeatClaim = claimDemoAccount(state, {
+    now: "2026-06-09T02:10:00.000Z",
+    ip: "127.0.0.1",
+    claimToken: "browser-a",
+  });
+  assert.equal(repeatClaim.loginName, "demo01");
+  assert.throws(() => claimDemoAccount(state, {
+    now: "2026-06-09T02:12:00.000Z",
+    ip: "127.0.0.2",
+    claimToken: "browser-b",
+  }), /今日演示账号已领完/);
+  const releasedClaim = claimDemoAccount(state, {
+    now: "2026-06-09T02:40:01.000Z",
+    ip: "127.0.0.2",
+    claimToken: "browser-b",
+  });
+  assert.equal(releasedClaim.loginName, "demo01");
 
   resetDemoTenantData(state, {
     user: user(state, "admin"),
