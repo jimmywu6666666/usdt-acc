@@ -2811,7 +2811,7 @@ tr:last-child td {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel-soft);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .annotation-modal-summary::before {
@@ -3034,13 +3034,36 @@ tr:last-child td {
     padding: 10px;
   }
 
+  .form-modal-body {
+    align-content: start;
+    grid-auto-rows: max-content;
+  }
+
   .form-modal-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
 
   .annotation-modal-summary {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    max-height: min(360px, 42dvh);
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 10px 10px 10px 12px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .annotation-modal-summary .summary-item {
+    padding: 6px 8px;
+  }
+
+  .annotation-modal-summary .summary-item.amount strong {
+    font-size: 18px;
+  }
+
+  .annotation-modal-summary .hash {
+    grid-column: 1 / -1;
   }
 
   .ticket-detail-meta {
@@ -3049,6 +3072,10 @@ tr:last-child td {
 }
 
 @media (max-width: 430px) {
+  .annotation-modal-summary {
+    max-height: min(330px, 40dvh);
+  }
+
   .ticket-detail-meta {
     grid-template-columns: 1fr;
   }
