@@ -3425,40 +3425,32 @@
     document.body.append(overlay);
   }
 
-  function accountDeliveryField(label, value, copyLabel = label, wide = false) {
+  function accountDeliveryField(label, value, wide = false) {
     const text = String(value || "-");
-    const copyValue = String(value || "");
     return `<div class="${wide ? "wide " : ""}account-delivery-field">
       <span>${escapeHtml(label)}</span>
-      <div class="account-delivery-value">
-        <strong class="mono">${escapeHtml(text)}</strong>
-        ${copyValue ? `<button class="btn small" type="button" data-copy-text="${escapeHtml(copyValue)}" data-copy-label="${escapeHtml(copyLabel)}">复制</button>` : ""}
-      </div>
+      <strong class="mono">${escapeHtml(text)}</strong>
     </div>`;
   }
 
   function showTotpSetup(setup, options = {}) {
     if (!setup?.secret) return;
-    const qrSvg = setup.otpauthUrl ? renderQrCodeSvg(setup.otpauthUrl) : "";
     const title = options.title || "登录密钥绑定信息";
-    const desc = options.desc || "请使用 Google Authenticator、Microsoft Authenticator 等验证器扫描二维码；关闭后页面不再显示完整密钥。";
+    const desc = options.desc || "请把登录密钥保存到验证器；关闭后页面不再显示完整密钥。";
     const deliveryText = [
       `登录账号：${setup.loginName || ""}`,
       options.password ? `初始密码：${options.password}` : "",
       `登录密钥：${setup.secret}`,
-      setup.otpauthUrl ? `扫码链接：${setup.otpauthUrl}` : "",
     ].filter(Boolean).join("\n");
     const overlay = createFormModal({
       title,
       desc,
       body: `
         <section class="annotation-modal-summary account-delivery-summary">
-          ${accountDeliveryField("登录账号", setup.loginName || "-", "登录账号")}
-          ${options.password ? accountDeliveryField("初始密码", options.password, "初始密码") : ""}
-          ${qrSvg ? `<div class="wide totp-qr-wrap"><span>扫码绑定</span>${qrSvg}</div>` : ""}
-          ${accountDeliveryField("登录密钥", setup.secret, "登录密钥", true)}
-          ${accountDeliveryField("备用链接", setup.otpauthUrl || "-", "扫码链接", true)}
-          ${deliveryText ? `<div class="wide account-delivery-all"><button class="btn" type="button" data-copy-text="${escapeHtml(deliveryText)}" data-copy-label="账号交付信息">复制全部</button></div>` : ""}
+          ${accountDeliveryField("登录账号", setup.loginName || "-")}
+          ${options.password ? accountDeliveryField("初始密码", options.password) : ""}
+          ${accountDeliveryField("登录密钥", setup.secret, true)}
+          ${deliveryText ? `<div class="wide account-delivery-all"><button class="btn primary" type="button" data-copy-text="${escapeHtml(deliveryText)}" data-copy-label="账号交付信息">复制全部</button></div>` : ""}
         </section>
         <p class="form-hint">绑定后，该账号登录时除账号密码外，还需要输入验证器里的 6 位动态验证码。</p>
       `,
