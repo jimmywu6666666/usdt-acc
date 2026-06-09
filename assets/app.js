@@ -1611,14 +1611,14 @@
           </div>
         </section>
         <section class="panel">
-          <div class="panel-title"><h3>演示账号管理</h3><span>演示账号不需要登录密钥，每天可重置演示数据</span></div>
-          ${renderDemoAccountManagement()}
-        </section>
-        <section class="panel">
           <div class="panel-title"><h3>租户管理</h3><span>查看各系统状态、主管、钱包和流水规模</span></div>
           ${renderTenantManagement()}
         </section>
         <section class="panel">${renderUserTable()}</section>
+        <section class="panel">
+          <div class="panel-title"><h3>演示账号管理</h3><span>演示账号不需要登录密钥，每天可重置演示数据</span></div>
+          ${renderDemoAccountManagement()}
+        </section>
       `;
     }
     return `
