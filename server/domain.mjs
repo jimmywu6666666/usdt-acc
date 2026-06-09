@@ -955,7 +955,7 @@ function demoClaimForClient(state, claim, now) {
     password: user?.demoPassword || "",
     tenantName: tenant?.name || "",
     claimedAt: claim.claimedAt || now,
-    resetText: "演示数据每天自动重置，当天已登录账号不会再次分配。",
+    resetText: "演示数据每天自动重置，账号登录后当天不再分配给其他访客。",
   };
 }
 

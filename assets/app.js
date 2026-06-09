@@ -1698,7 +1698,7 @@
         <label>登录密码<input name="password" required minlength="6" autocomplete="new-password" placeholder="至少 6 位"></label>
         <div class="actions"><button class="btn primary" type="submit">新增演示账号</button></div>
       </form>
-      <div class="notice">公开领取页：${renderCopyText(`${location.origin}/demo`, "演示账号领取页")}。账号当天领取或登录后不会再次分配。</div>
+      <div class="notice">公开领取页：${renderCopyText(`${location.origin}/demo`, "演示账号领取页")}。同一浏览器短时间重复领取会返回同一账号；账号登录后当天不再分配给其他访客。</div>
       <div class="table-wrap"><table>
         <thead><tr><th>演示系统</th><th>账号</th><th>状态</th><th>今日领取</th><th>最近登录</th><th>最近重置</th><th>操作</th></tr></thead>
         <tbody>${rows || `<tr><td colspan="7" class="empty">暂无演示账号</td></tr>`}</tbody>
