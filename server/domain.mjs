@@ -2000,17 +2000,21 @@ function seedDemoTenantData(state, { tenant, supervisor, employee, now }) {
   };
   state.wallets.push(walletA, walletB);
   const txs = [
-    demoTx(tenant.id, walletA.id, "income", 5200, at(0, 10, 20), "客户 A 到款", "approved"),
-    demoTx(tenant.id, walletB.id, "expense", 1800, at(0, 11, 5), "供应商 B 付款", "pending"),
+    demoTx(tenant.id, walletA.id, "income", 5200, at(0, 10, 20), "客户 A 到款，已审核入账", "approved"),
+    demoTx(tenant.id, walletB.id, "expense", 1800, at(0, 11, 5), "供应商 B 付款，等待主管审核", "pending"),
     demoTx(tenant.id, walletA.id, "income", 960, at(0, 13, 25), "待补业务说明", "unannotated"),
-    demoTx(tenant.id, walletB.id, "expense", 650, at(0, 15, 10), "测试手续费", "non_business"),
-    demoTx(tenant.id, walletA.id, "income", 1200, at(-1, 16, 40), "客户 C 回款", "rejected"),
-    demoTx(tenant.id, walletB.id, "expense", 2300, at(-3, 14, 35), "供应商 D 货款", "approved"),
-    demoTx(tenant.id, walletA.id, "income", 3000, at(-8, 9, 30), "平应收演示", "settlement"),
+    demoTx(tenant.id, walletB.id, "expense", 650, at(0, 15, 10), "测试手续费，已标记非业务", "non_business"),
+    demoTx(tenant.id, walletA.id, "income", 3600, at(-1, 9, 20), "昨日客户 C 回款，已审核", "approved"),
+    demoTx(tenant.id, walletB.id, "expense", 720, at(-1, 10, 35), "昨日供应商加急付款，待审核", "pending"),
+    demoTx(tenant.id, walletA.id, "income", 1200, at(-1, 16, 40), "昨日客户资料不完整，已驳回", "rejected"),
+    demoTx(tenant.id, walletB.id, "expense", 2300, at(-3, 14, 35), "供应商 D 货款，已审核", "approved"),
+    demoTx(tenant.id, walletA.id, "income", 3000, at(-8, 9, 30), "平应收演示，已审核", "settlement"),
+    demoTx(tenant.id, walletA.id, "income", 1500, at(-2, 14, 10), "部分平应收演示，已审核", "settlement_partial"),
+    demoTx(tenant.id, walletB.id, "expense", 980, at(0, 16, 20), "平应付演示，等待主管审核", "settlement_pending"),
   ];
   state.chainTransactions.unshift(...txs);
   for (const tx of txs) {
-    if (tx.demoStatus === "unannotated") continue;
+    if (["unannotated", "settlement_pending"].includes(tx.demoStatus)) continue;
     const annotation = {
       id: id("ann_demo"),
       tenantId: tenant.id,
@@ -2021,7 +2025,7 @@ function seedDemoTenantData(state, { tenant, supervisor, employee, now }) {
       attachment: null,
       annotatedBy: tx.demoStatus === "non_business" ? supervisor?.id || employee.id : employee.id,
       annotatedAt: tx.chainTime,
-      status: tx.demoStatus === "non_business" ? "non_business" : tx.demoStatus === "rejected" ? "rejected" : "approved",
+      status: tx.demoStatus === "non_business" ? "non_business" : tx.demoStatus === "rejected" ? "rejected" : tx.demoStatus === "pending" ? "pending" : "approved",
       reviewedBy: ["approved", "rejected"].includes(tx.demoStatus) ? supervisor?.id || employee.id : null,
       reviewedAt: ["approved", "rejected"].includes(tx.demoStatus) ? tx.chainTime : null,
       rejectionReason: tx.demoStatus === "rejected" ? "请补充客户合同编号和完整用途。" : "",
@@ -2035,9 +2039,11 @@ function seedDemoTenantData(state, { tenant, supervisor, employee, now }) {
     tx.currentAnnotationId = annotation.id;
   }
   const receivable = demoReceivable(tenant.id, employee.id, "receivable", "客户 E", 3000, "业务收入", at(-10, 10), "已审核应收款，已通过链上流水平账。", "approved");
-  const payable = demoReceivable(tenant.id, employee.id, "payable", "供应商 F", 1500, "业务支出", at(-2, 11), "待付款采购单。", "pending");
+  const payable = demoReceivable(tenant.id, employee.id, "payable", "供应商 F", 1500, "业务支出", at(-2, 11), "待审核付款采购单。", "pending");
   const partial = demoReceivable(tenant.id, employee.id, "receivable", "客户 G", 4800, "保证金", at(-4, 12), "部分到账，剩余待收。", "approved");
-  state.receivablePayables.push(receivable, payable, partial);
+  const pendingReceivable = demoReceivable(tenant.id, employee.id, "receivable", "客户 H", 2600, "业务收入", at(0, 12), "今日新增应收，等待主管确认。", "pending");
+  const pendingSettlementPayable = demoReceivable(tenant.id, employee.id, "payable", "供应商 I", 980, "业务支出", at(-5, 15), "已审核应付款，等待链上付款平账审核。", "approved");
+  state.receivablePayables.push(receivable, payable, partial, pendingReceivable, pendingSettlementPayable);
   const settleTx = txs.find((tx) => tx.demoStatus === "settlement");
   const settlement = {
     id: id("rps_demo"),
@@ -2060,9 +2066,55 @@ function seedDemoTenantData(state, { tenant, supervisor, employee, now }) {
   settlement.annotationId = settleAnnotation.id;
   state.annotations.push(settleAnnotation);
   settleTx.currentAnnotationId = settleAnnotation.id;
+  const partialTx = txs.find((tx) => tx.demoStatus === "settlement_partial");
+  const partialSettlement = {
+    id: id("rps_demo"),
+    tenantId: tenant.id,
+    itemId: partial.id,
+    txId: partialTx.id,
+    amount: 1500,
+    note: "演示：整笔流水用于部分平应收款。",
+    attachmentName: "",
+    attachment: null,
+    status: "approved",
+    submittedBy: supervisor?.id || employee.id,
+    submittedAt: partialTx.chainTime,
+    reviewedBy: supervisor?.id || employee.id,
+    reviewedAt: partialTx.chainTime,
+    rejectionReason: "",
+  };
+  state.receivableSettlements.push(partialSettlement);
+  const partialAnnotation = buildSettlementAnnotation(state, { user: supervisor || employee, tx: partialTx, item: partial, settlement: partialSettlement, now: partialTx.chainTime });
+  partialSettlement.annotationId = partialAnnotation.id;
+  state.annotations.push(partialAnnotation);
+  partialTx.currentAnnotationId = partialAnnotation.id;
+  const pendingSettlementTx = txs.find((tx) => tx.demoStatus === "settlement_pending");
+  const pendingSettlement = {
+    id: id("rps_demo"),
+    tenantId: tenant.id,
+    itemId: pendingSettlementPayable.id,
+    txId: pendingSettlementTx.id,
+    amount: 980,
+    note: "演示：付款流水提交平应付款，等待主管审核。",
+    attachmentName: "",
+    attachment: null,
+    status: "pending",
+    submittedBy: employee.id,
+    submittedAt: pendingSettlementTx.chainTime,
+    reviewedBy: null,
+    reviewedAt: null,
+    rejectionReason: "",
+  };
+  state.receivableSettlements.push(pendingSettlement);
+  const pendingSettlementAnnotation = buildSettlementAnnotation(state, { user: employee, tx: pendingSettlementTx, item: pendingSettlementPayable, settlement: pendingSettlement, now: pendingSettlementTx.chainTime });
+  pendingSettlement.annotationId = pendingSettlementAnnotation.id;
+  state.annotations.push(pendingSettlementAnnotation);
+  pendingSettlementTx.currentAnnotationId = pendingSettlementAnnotation.id;
   updateReceivablePayableStatus(state, receivable);
   updateReceivablePayableStatus(state, payable);
   updateReceivablePayableStatus(state, partial);
+  updateReceivablePayableStatus(state, pendingReceivable);
+  updateReceivablePayableStatus(state, pendingSettlementPayable);
   state.supportTickets.push({
     id: id("ticket_demo"),
     tenantId: tenant.id,

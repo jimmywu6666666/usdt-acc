@@ -591,6 +591,11 @@ test("admin creates and resets claimable demo accounts without login keys", () =
   assert.equal(created.supervisor.totpSecret, "");
   assert.equal(created.supervisor.demoPassword, "demo123456");
   assert.equal(state.chainTransactions.filter((tx) => tx.tenantId === created.tenant.id).length > 0, true);
+  assert.ok(state.chainTransactions.some((tx) => tx.tenantId === created.tenant.id && tx.chainTime.startsWith("2026-06-08")));
+  assert.ok(state.annotations.filter((annotation) => annotation.tenantId === created.tenant.id && annotation.status === "pending" && !annotation.settlementId).length >= 2);
+  assert.ok(state.receivablePayables.filter((item) => item.tenantId === created.tenant.id && item.reviewStatus === "pending").length >= 2);
+  assert.ok(state.receivableSettlements.some((settlement) => settlement.tenantId === created.tenant.id && settlement.status === "pending"));
+  assert.ok(state.receivablePayables.some((item) => item.tenantId === created.tenant.id && item.status === "partial"));
 
   const firstClaim = claimDemoAccount(state, {
     now: "2026-06-09T02:00:00.000Z",
