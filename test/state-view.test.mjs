@@ -114,6 +114,16 @@ test("supervisors only receive their tenant data", () => {
   assert.equal("storageKey" in view.supportTickets[0].messages[0].attachment, false);
 });
 
+test("demo supervisors do not receive platform payment wallet", () => {
+  const state = fixture();
+  state.tenants.push({ id: "tenant_demo", name: "演示账号", demo: true, enabled: true });
+  state.users.push({ id: "demo_sup", tenantId: "tenant_demo", name: "演示主管", role: "supervisor", demo: true });
+  const view = stateForUser(state, state.users.find((item) => item.id === "demo_sup"));
+  assert.equal(view.subscriptionSettings.platformWalletAddress, "");
+  assert.equal(view.subscriptionSettings.monthlyFee, 100);
+  assert.deepEqual(view.tenants.map((item) => item.id), ["tenant_demo"]);
+});
+
 test("limited employees receive unannotated work and their own records only", () => {
   const state = fixture();
   const view = stateForUser(state, state.users.find((item) => item.id === "emp_a"));

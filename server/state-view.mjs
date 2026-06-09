@@ -21,6 +21,7 @@ export function stateForUser(state, user) {
   }
 
   const tenantId = user.tenantId;
+  const currentTenant = safeState.tenants.find((item) => item.id === tenantId);
   const adminUserIds = new Set(safeState.users.filter((item) => item.role === "admin").map((item) => item.id));
   const tenantUsers = safeState.users.filter((item) => (
     item.tenantId === tenantId
@@ -36,7 +37,7 @@ export function stateForUser(state, user) {
     enabled: safeState.subscriptionSettings?.enabled === true,
     monthlyFee: safeState.subscriptionSettings?.monthlyFee || 0,
     firstOpenFee: Number(safeState.subscriptionSettings?.firstOpenFee || 0),
-    platformWalletAddress: safeState.subscriptionSettings?.platformWalletAddress || "",
+    platformWalletAddress: currentTenant?.demo ? "" : safeState.subscriptionSettings?.platformWalletAddress || "",
     autoDisable: safeState.subscriptionSettings?.autoDisable !== false,
   };
   safeState.systemSettings = {

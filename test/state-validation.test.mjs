@@ -948,6 +948,17 @@ test("supervisor renews a tenant by submitting a unique transaction hash", () =>
   }), /不能重复提交/);
 });
 
+test("demo tenant cannot submit subscription hash", () => {
+  const state = ledgerState({
+    tenants: [{ id: "tenant_alpha", name: "演示账号", enabled: true, demo: true, subscriptionStatus: "demo" }],
+  });
+  assert.throws(() => submitSubscriptionHash(state, {
+    user: user(state, "sup"),
+    hash: "c".repeat(64),
+    transaction: { hash: "c".repeat(64), direction: "income", amount: 100, confirmed: true },
+  }), /演示环境不支持租用续费/);
+});
+
 test("bad hash payment amount is left for admin manual renewal", () => {
   const hash = "b".repeat(64);
   const state = ledgerState({

@@ -739,14 +739,18 @@
 
   function tenantBusinessLockText(tenant = currentTenant()) {
     if (tenant.enabled === false) return "当前系统已停用，暂不能进行新增钱包、批注、往来款、平账和审核等业务操作。";
+    if (tenant.demo) return "";
     if (!tenant.subscriptionExpiresAt) return "当前系统租用未开通，暂不能进行新增钱包、批注、往来款、平账和审核等业务操作。";
     if (subscriptionStatusKey(tenant) === "expired") return "当前系统租用已到期，暂不能进行新增钱包、批注、往来款、平账和审核等业务操作。";
     return "";
   }
 
   function renderTenantBusinessLockNotice() {
+    const tenant = currentTenant();
     const message = tenantBusinessLockText();
-    return message ? `<div class="notice chain-status-off">${message}主管可在“租用续费”页面提交付款哈希。</div>` : "";
+    if (!message) return "";
+    const actionText = tenant.demo ? "" : "主管可在“租用续费”页面提交付款哈希。";
+    return `<div class="notice chain-status-off">${message}${actionText}</div>`;
   }
 
   function platformPaymentStatusMap() {
@@ -1790,6 +1794,32 @@
     const settings = state.subscriptionSettings || {};
     if (currentUser().role === "supervisor") {
       const tenant = currentTenant();
+      if (tenant.demo) {
+        return `
+          ${pageHead("租用续费", "演示环境用于体验功能，不需要提交付款哈希")}
+          <section class="grid two-col subscription-overview">
+            <div class="panel">
+              <div class="panel-title"><h3>当前租用状态</h3>${subscriptionStatusBadge(tenant)}</div>
+              <div class="subscription-status-card">
+                <div>
+                  <span>系统类型</span>
+                  <strong>演示环境</strong>
+                  <em>无需续费</em>
+                </div>
+                <div>
+                  <span>系统名称</span>
+                  <strong>${escapeHtml(tenant.name)}</strong>
+                  <em>${tenant.enabled ? "演示功能已启用" : "演示功能已停用"}</em>
+                </div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-title"><h3>演示说明</h3><span>不展示平台收款信息</span></div>
+              <div class="notice">演示账号仅用于体验现金流台账、批注审核、往来款和平账等功能；请勿在演示环境提交付款或续费哈希。</div>
+            </div>
+          </section>
+        `;
+      }
       const firstOpenFee = Number(settings.firstOpenFee || 0);
       const isUnopened = !tenant.subscriptionExpiresAt;
       const rentText = isUnopened && firstOpenFee > 0
@@ -2412,6 +2442,7 @@
   }
 
   function renderHelp() {
+    const demoTenant = currentTenant()?.demo;
     return `
       ${pageHead("使用说明", "主管和员工日常操作说明，功能调整后会同步更新")}
       <section class="panel help-doc">
@@ -2420,7 +2451,7 @@
           "正式登录使用登录账号和密码；已绑定登录密钥的账号还需要输入验证器里的 6 位动态验证码。",
           "所有用户都可以在我的账号中修改自己的登录密码或重置自己的登录密钥。",
           "员工主要处理链上流水批注、往来款提交、平账提交、账目查询和自己的操作日志。",
-          "主管除员工功能外，还可以审核批注、审核往来款、审核平账、管理员工账号、维护本系统钱包、处理非业务流水和提交租用续费哈希。",
+          demoTenant ? "主管除员工功能外，还可以审核批注、审核往来款、审核平账、管理员工账号、维护本系统钱包和处理非业务流水。" : "主管除员工功能外，还可以审核批注、审核往来款、审核平账、管理员工账号、维护本系统钱包、处理非业务流水和提交租用续费哈希。",
           "系统里的金额、钱包、方向、链上时间和交易哈希都来自链上流水，不能手工修改。",
           "业务信息通过批注补充，包括分类、备注用途和凭证图片。",
           "凭证只支持图片上传，也可以直接粘贴截图。",
@@ -2497,7 +2528,11 @@
           "取消勾选时，员工只能查看自己提交或需要自己处理的记录。",
           "员工无权限创建账号或修改其他员工权限。",
         ])}
-        ${helpSection("九、租用续费", [
+        ${helpSection("九、租用续费", currentTenant()?.demo ? [
+          "演示环境仅用于体验功能，不需要租用续费。",
+          "演示账号不会显示平台收款钱包，也不需要提交付款哈希。",
+          "请勿向演示环境进行真实转账；正式开通或续费请联系平台确认。",
+        ] : [
           "主管可在租用续费页面查看当前系统到期时间、剩余租用天数、系统启用状态、月租费用和平台收款钱包地址。",
           "系统未开通、已到期或已停用时，可以登录查看历史和提交续费哈希，但不能新增钱包、启用钱包、提交批注、创建往来款、提交平账或处理审核。",
           "页面会显示本系统续费提交记录，包括交易哈希、金额、处理状态、续费时长和说明。",

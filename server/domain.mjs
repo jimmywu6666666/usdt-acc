@@ -1085,6 +1085,7 @@ export function submitSubscriptionHash(state, {
   reconcileState(state);
   const tenant = state.tenants.find((item) => item.id === user?.tenantId);
   if (!tenant || user.role !== "supervisor") throw forbidden("只有主管可以提交租用续费哈希");
+  if (tenant.demo) throw badRequest("演示环境不支持租用续费");
   const settings = state.subscriptionSettings;
   if (!settings.enabled) throw badRequest("平台收款自动续费未启用");
   if (!settings.platformWalletAddress) throw badRequest("管理员暂未配置平台收款钱包");
