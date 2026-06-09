@@ -475,7 +475,10 @@
 
   function visibleTickets() {
     const tickets = state.supportTickets || [];
-    if (currentUser().role === "admin") return tickets;
+    if (currentUser().role === "admin") {
+      const demoTenantIds = new Set((state.tenants || []).filter((tenant) => tenant.demo).map((tenant) => tenant.id));
+      return tickets.filter((item) => !demoTenantIds.has(item.tenantId));
+    }
     return tickets.filter((item) => item.tenantId === visibleTenantId());
   }
 
@@ -1956,7 +1959,7 @@
     return `<form id="ticketFilters" class="filters compact-filters">
       ${currentUser().role === "admin" ? `<label>所属系统<select name="tenantId">
         <option value="">全部系统</option>
-        ${state.tenants.map((tenant) => `<option value="${escapeHtml(tenant.id)}" ${ticketFilters.tenantId === tenant.id ? "selected" : ""}>${escapeHtml(tenant.name)}</option>`).join("")}
+        ${state.tenants.filter((tenant) => !tenant.demo).map((tenant) => `<option value="${escapeHtml(tenant.id)}" ${ticketFilters.tenantId === tenant.id ? "selected" : ""}>${escapeHtml(tenant.name)}</option>`).join("")}
       </select></label>` : ""}
       <label>状态<select name="status">
         <option value="">全部状态</option>

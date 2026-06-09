@@ -52,6 +52,7 @@ import {
   walletBalance,
 } from "../server/domain.mjs";
 import { hashPassword, verifyPassword, verifyTotp } from "../server/auth.mjs";
+import { stateForUser } from "../server/state-view.mjs";
 
 function ledgerState(overrides = {}) {
   return {
@@ -247,6 +248,30 @@ test("support tickets are restricted to supervisors, admins and own tenant", () 
     ticketId: ticket.id,
     content: "平台可回复",
   }));
+});
+
+test("admin support ticket view hides demo tenant tickets", () => {
+  const state = ledgerState({
+    tenants: [
+      { id: "tenant_alpha", name: "Alpha", enabled: true, subscriptionExpiresAt: "2026-12-31T00:00:00.000Z", subscriptionStatus: "active" },
+      { id: "tenant_demo", name: "演示账号", enabled: true, demo: true, subscriptionStatus: "demo" },
+    ],
+    users: [
+      { id: "admin", tenantId: null, name: "管理员", role: "admin", canViewAll: true },
+      { id: "sup", tenantId: "tenant_alpha", name: "Alpha 主管", role: "supervisor", canViewAll: true },
+      { id: "demo_sup", tenantId: "tenant_demo", name: "演示主管", role: "supervisor", canViewAll: true, demo: true },
+    ],
+  });
+  const realTicket = createSupportTicket(state, {
+    user: user(state, "sup"),
+    input: { title: "正式租户工单", content: "需要平台处理" },
+  });
+  createSupportTicket(state, {
+    user: user(state, "demo_sup"),
+    input: { title: "演示租户工单", content: "演示数据不要进入管理员工单中心" },
+  });
+  const adminState = stateForUser(state, user(state, "admin"));
+  assert.deepEqual(adminState.supportTickets.map((ticket) => ticket.id), [realTicket.id]);
 });
 
 test("migrates a legacy matched ledger entry into an annotation", () => {

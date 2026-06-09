@@ -14,6 +14,8 @@ export function stateForUser(state, user) {
   safeState.supportTickets = safeState.supportTickets.map(supportTicketForClient);
 
   if (user.role === "admin") {
+    const demoTenantIds = new Set(safeState.tenants.filter((item) => item.demo).map((item) => item.id));
+    safeState.supportTickets = safeState.supportTickets.filter((item) => !demoTenantIds.has(item.tenantId));
     safeState.activeUserId = user.id;
     return safeState;
   }
