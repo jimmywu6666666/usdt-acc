@@ -2447,27 +2447,17 @@
     const settings = state.subscriptionSettings || {};
     return `
       ${pageHead("系统管理", "维护系统级限制、收费设置和统一收支分类")}
-      <section class="grid two-col">
-        <div class="panel"><div class="panel-title"><h3>钱包启用限制</h3><span>按每个系统单独计算</span></div>
+      <section class="panel">
+        <div class="panel-title"><h3>钱包启用限制</h3><span>按每个系统单独计算</span></div>
           <form id="systemSettingsForm" class="form-grid one">
             <label>每个系统最多启用钱包数<input name="walletEnabledLimit" type="number" min="0" step="1" value="${escapeHtml(state.systemSettings?.walletEnabledLimit ?? 0)}" required></label>
             <p class="form-hint">填 0 表示不限制；达到限制后，主管不能新增启用钱包，也不能把停用钱包重新启用。</p>
             <div class="actions"><button class="btn primary" type="submit">保存限制</button></div>
           </form>
-        </div>
-        <div class="panel">
-          <div class="panel-title"><h3>管理入口</h3></div>
-          <div class="metric-list">
-            <div><span>开通系统和租户状态</span><strong>租户管理</strong></div>
-            <div><span>租用收费和续费</span><strong>租用管理</strong></div>
-            <div><span>服务器性能和备份</span><strong>服务器管理</strong></div>
-          </div>
-        </div>
       </section>
-      <section class="grid two-col">
-        <div class="panel">
-          <div class="panel-title"><h3>收费设置</h3><span>平台收款钱包用于租户续费，不计入租户业务流水</span></div>
-          <form id="subscriptionSettingsForm" class="form-grid one">
+      <section class="panel">
+        <div class="panel-title"><h3>收费设置</h3><span>平台收款钱包用于租户续费，不计入租户业务流水</span></div>
+        <form id="subscriptionSettingsForm" class="form-grid one">
             <label>月租费用（USDT）<input name="monthlyFee" type="number" min="0.000001" step="0.000001" value="${escapeHtml(settings.monthlyFee || 100)}" required></label>
             <label><span class="field-label">首次开通优惠价（USDT） <em class="optional-mark">填 0 关闭</em></span><input name="firstOpenFee" type="number" min="0" step="0.000001" value="${escapeHtml(settings.firstOpenFee || 0)}" required></label>
             <label><span class="field-label">平台收款钱包地址 <em class="optional-mark">启用自动续费时填写</em></span><input name="platformWalletAddress" value="${escapeHtml(settings.platformWalletAddress || "")}" placeholder="T..."></label>
@@ -2477,16 +2467,7 @@
             <label class="checkline"><input name="referralEnabled" type="checkbox" ${settings.referralEnabled ? "checked" : ""}> 启用推广有礼</label>
             <label><span class="field-label">邀请成功奖励（智慧星币） <em class="optional-mark">首次付费开通后发放</em></span><input name="referralRewardCoins" type="number" min="0" step="0.000001" value="${escapeHtml(settings.referralRewardCoins || 0)}" required></label>
             <div class="actions"><button class="btn primary" type="submit">保存设置</button></div>
-          </form>
-        </div>
-        <div class="panel">
-          <div class="panel-title"><h3>识别规则</h3></div>
-          <div class="metric-list">
-            <div><span>租户识别</span><strong>主管提交交易哈希</strong></div>
-            <div><span>防重复</span><strong>同一交易哈希只能处理一次</strong></div>
-            <div><span>异常处理</span><strong>未通过自动校验的付款进入平台收入列表处理</strong></div>
-          </div>
-        </div>
+        </form>
       </section>
       <section class="panel">
         <div class="panel-title"><h3>新增统一分类</h3></div>
