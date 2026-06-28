@@ -296,13 +296,6 @@
     localStorage.setItem(UI_STATE_KEY, JSON.stringify({
       activeView: state.activeView,
       activeTenantId: state.activeTenantId,
-      entryFilters,
-      entriesPage,
-      logFilters,
-      logsPage,
-      receivableFilters,
-      accountFilters,
-      ticketFilters,
     }));
   }
 
@@ -310,13 +303,6 @@
     const ui = readUiState();
     if (ui.activeView) state.activeView = ui.activeView;
     if (ui.activeTenantId && currentUser().role === "admin") state.activeTenantId = ui.activeTenantId;
-    if (ui.entryFilters) entryFilters = { ...defaultEntryFilters(), ...ui.entryFilters };
-    if (Number.isInteger(Number(ui.entriesPage)) && Number(ui.entriesPage) > 0) entriesPage = Number(ui.entriesPage);
-    if (ui.logFilters) logFilters = { ...defaultLogFilters(), ...ui.logFilters };
-    if (Number.isInteger(Number(ui.logsPage)) && Number(ui.logsPage) > 0) logsPage = Number(ui.logsPage);
-    if (ui.receivableFilters) receivableFilters = { ...defaultReceivableFilters(), ...ui.receivableFilters };
-    if (ui.accountFilters) accountFilters = { ...defaultAccountFilters(), ...ui.accountFilters };
-    if (ui.ticketFilters) ticketFilters = { ...defaultTicketFilters(), ...ui.ticketFilters };
   }
 
   function applyLoadedState(nextState, { preserveUi = true } = {}) {
@@ -1220,9 +1206,15 @@
         <label>关键词<input name="keyword" value="${escapeHtml(entryFilters.keyword)}" placeholder="哈希、地址、分类、说明、批注人"></label>
         <div class="actions"><button class="btn primary" type="submit">查询</button><button class="btn" type="reset">清空</button></div>
       </form>
+      ${renderEntriesFilterHint(rows.length)}
       ${renderTransactionTable(pageRows, true)}
       ${renderEntriesPagination(rows.length, totalPages)}
     `;
+  }
+
+  function renderEntriesFilterHint(filteredCount) {
+    if (filteredCount || !tenantTransactions().length) return "";
+    return `<div class="notice success">系统里已有流水，但当前筛选条件没有结果。手机端如果看不到流水，可以点击“清空”，或把结束日期改到今天后再查询。</div>`;
   }
 
   function filteredTransactions() {
@@ -3403,6 +3395,9 @@
       entriesPage = 1;
       logFilters = defaultLogFilters();
       logsPage = 1;
+      receivableFilters = defaultReceivableFilters();
+      accountFilters = defaultAccountFilters();
+      ticketFilters = defaultTicketFilters();
       migrateState();
       saveUiState();
       save();
