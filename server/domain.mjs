@@ -877,6 +877,18 @@ export function createReferralApplication(state, { input, now = new Date().toISO
   if (state.referralApplications.some((item) => item.status === "pending" && sameLoginName(item.supervisorLoginName, supervisorLoginName))) {
     throw badRequest("该登录账号已提交申请，请等待平台处理");
   }
+  const publicAdmin = { id: invite.referrerTenantId ? "public_referral" : "public_signup", role: "admin", name: "开户注册页" };
+  const created = createTenant(state, {
+    user: publicAdmin,
+    input: {
+      name,
+      supervisorName,
+      supervisorLoginName,
+      supervisorPassword,
+      referredByTenantId: invite.referrerTenantId,
+    },
+    now,
+  });
   const application = {
     id: id("refapp"),
     referralCode: invite.referralCode,
@@ -884,24 +896,23 @@ export function createReferralApplication(state, { input, now = new Date().toISO
     name,
     supervisorName,
     supervisorLoginName,
-    supervisorPassword,
     contact,
     note,
-    status: "pending",
+    status: "auto_approved",
     createdAt: now,
-    approvedAt: null,
-    approvedBy: null,
-    tenantId: null,
+    approvedAt: now,
+    approvedBy: publicAdmin.id,
+    tenantId: created.tenant.id,
   };
   state.referralApplications.unshift(application);
   appendLog(state, {
-    tenantId: invite.referrerTenantId || null,
-    userId: invite.referrerTenantId ? "public_referral" : "public_signup",
-    action: "提交开户链接申请",
+    tenantId: created.tenant.id,
+    userId: publicAdmin.id,
+    action: "提交并自动开户注册",
     target: `${name}:${supervisorLoginName}`,
     createdAt: now,
   });
-  return applicationForClient(application);
+  return { ...created, application: applicationForClient(application), initialPassword: supervisorPassword };
 }
 
 export function approveReferralApplication(state, { user, applicationId, now = new Date().toISOString() }) {

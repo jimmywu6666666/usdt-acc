@@ -1116,7 +1116,7 @@ test("referral applications create a referred tenant and reward first paid openi
   });
   const invite = getReferralInvite(state, { code: "alpha-code" });
   assert.equal(invite.referrerName, "Alpha");
-  const application = createReferralApplication(state, {
+  const created = createReferralApplication(state, {
     input: {
       referralCode: "alpha-code",
       name: "Beta",
@@ -1127,16 +1127,12 @@ test("referral applications create a referred tenant and reward first paid openi
     },
     now: "2026-06-08T00:00:00.000Z",
   });
-  assert.equal(application.status, "pending");
-  const created = approveReferralApplication(state, {
-    user: user(state, "admin"),
-    applicationId: application.id,
-    now: "2026-06-08T00:10:00.000Z",
-  });
+  assert.equal(created.application.status, "auto_approved");
   assert.equal(created.tenant.referredByTenantId, "tenant_alpha");
   assert.equal(created.initialPassword, "123456");
   assert.equal("supervisorPassword" in state.referralApplications[0], false);
-  assert.equal(state.referralApplications[0].status, "approved");
+  assert.equal(state.referralApplications[0].status, "auto_approved");
+  assert.equal(state.starCoinLedger.length, 0);
   const betaSupervisor = state.users.find((item) => item.tenantId === created.tenant.id && item.role === "supervisor");
   const hash = "d".repeat(64);
   submitSubscriptionHash(state, {
@@ -1175,7 +1171,7 @@ test("public signup application can be approved without a referrer", () => {
       referralRewardCoins: 25,
     },
   });
-  const application = createReferralApplication(state, {
+  const created = createReferralApplication(state, {
     input: {
       name: "Gamma",
       supervisorName: "Gamma 主管",
@@ -1183,12 +1179,39 @@ test("public signup application can be approved without a referrer", () => {
       supervisorPassword: "123456",
     },
   });
-  assert.equal(application.referrerTenantId, null);
+  assert.equal(created.application.referrerTenantId, null);
+  assert.equal(created.application.status, "auto_approved");
+  assert.equal(created.tenant.referredByTenantId, null);
+  assert.equal(state.starCoinLedger.length, 0);
+});
+
+test("legacy pending referral application can still be approved by admin", () => {
+  const state = ledgerState({
+    referralApplications: [{
+      id: "refapp_legacy",
+      referralCode: "",
+      referrerTenantId: null,
+      name: "Legacy",
+      supervisorName: "Legacy 主管",
+      supervisorLoginName: "legacy_sup",
+      supervisorPassword: "123456",
+      contact: "",
+      note: "",
+      status: "pending",
+      createdAt: "2026-06-08T00:00:00.000Z",
+      approvedAt: null,
+      approvedBy: null,
+      tenantId: null,
+    }],
+  });
   const created = approveReferralApplication(state, {
     user: user(state, "admin"),
-    applicationId: application.id,
+    applicationId: "refapp_legacy",
   });
   assert.equal(created.tenant.referredByTenantId, null);
+  assert.equal(created.initialPassword, "123456");
+  assert.equal(state.referralApplications[0].status, "approved");
+  assert.equal("supervisorPassword" in state.referralApplications[0], false);
   assert.equal(state.starCoinLedger.length, 0);
 });
 

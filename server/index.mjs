@@ -178,13 +178,20 @@ async function handleApi(req, res, pathname) {
 
   if (pathname === "/api/referral-applications" && req.method === "POST") {
     const body = await readJsonBody(req);
-    let application = null;
+    let created = null;
     await storage.mutateState(async (current) => {
       if (!current) throw Object.assign(new Error("系统状态尚未初始化"), { statusCode: 404 });
-      application = createReferralApplication(current, { input: body });
+      created = createReferralApplication(current, { input: body });
       return current;
     });
-    respond(200, { ok: true, application });
+    respond(200, {
+      ok: true,
+      tenant: created?.tenant,
+      supervisor: publicUser(created?.supervisor),
+      application: created?.application,
+      totpSetup: totpSetupForUser(created?.supervisor),
+      initialPassword: created?.initialPassword || "",
+    });
     return;
   }
 

@@ -774,6 +774,7 @@
     return {
       pending: ["待开通", "orange"],
       approved: ["已开通", "green"],
+      auto_approved: ["已自动开通", "blue"],
     };
   }
 
@@ -898,9 +899,10 @@
             <label>初始密码<input name="supervisorPassword" type="password" required minlength="6" placeholder="至少 6 位"></label>
             <label><span class="field-label">联系方式 <em class="optional-mark">选填</em></span><input name="contact" placeholder="Telegram"></label>
             <label><span class="field-label">备注 <em class="optional-mark">选填</em></span><textarea name="note" rows="3" placeholder="补充说明"></textarea></label>
-            <button class="btn primary" type="submit">提交开通申请</button>
+            <button class="btn primary" type="submit">提交并获取开户信息</button>
           </form>
-          <p class="login-hint">提交后由平台管理员开通系统，开通后会交付登录账号信息。</p>
+          <div data-invite-delivery></div>
+          <p class="login-hint">提交后会立即生成未付费系统和主管账号；请保存开户信息，登录后可在“租用续费”页面提交付款哈希。</p>
         </section>
       </main>
     `;
@@ -3241,7 +3243,7 @@
     event.preventDefault();
     const form = event.target;
     const data = Object.fromEntries(new FormData(form).entries());
-    if (!confirm("确认提交开户链接申请？提交后需等待平台管理员开通。")) return;
+    if (!confirm("确认提交并生成开户信息？请在提交成功后立即保存登录账号和登录密钥。")) return;
     const submitButton = form.querySelector('button[type="submit"]');
     submitButton.disabled = true;
     try {
@@ -3252,15 +3254,40 @@
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "提交失败");
+      const initialPassword = payload.initialPassword || data.supervisorPassword || "";
       form.reset();
       form.hidden = true;
       const status = document.querySelector("[data-invite-status]");
       status.className = "notice success";
-      status.textContent = "申请已提交，请等待平台管理员开通并交付登录信息。";
+      status.textContent = "开户信息已生成，请立即保存；登录后未付费前正式业务功能会受限。";
+      const delivery = document.querySelector("[data-invite-delivery]");
+      if (delivery) delivery.innerHTML = renderInviteDelivery(payload.totpSetup, initialPassword);
     } catch (error) {
       submitButton.disabled = false;
       toast(error.message);
     }
+  }
+
+  function renderInviteDelivery(setup, initialPassword) {
+    if (!setup?.secret) return "";
+    const loginUrl = location.origin;
+    const deliveryText = [
+      `登录网址：${loginUrl}`,
+      `登录账号：${setup.loginName || ""}`,
+      `初始密码：${initialPassword || ""}`,
+      `登录密钥：${setup.secret}`,
+    ].join("\n");
+    return `<section class="invite-delivery">
+      <div class="panel-title"><h3>开户信息</h3><span>关闭页面后不会再次显示完整登录密钥</span></div>
+      <section class="annotation-modal-summary account-delivery-summary">
+        ${accountDeliveryField("登录网址", loginUrl, true)}
+        ${accountDeliveryField("登录账号", setup.loginName || "-")}
+        ${accountDeliveryField("初始密码", initialPassword || "-")}
+        ${accountDeliveryField("登录密钥", setup.secret, true)}
+        <div class="wide account-delivery-all"><button class="btn primary" type="button" data-copy-text="${escapeHtml(deliveryText)}" data-copy-label="开户信息">复制全部</button></div>
+      </section>
+      <p class="login-hint">请把登录密钥保存到验证器；以后登录需要账号、密码和 6 位动态验证码。</p>
+    </section>`;
   }
 
   async function loadAccounts() {

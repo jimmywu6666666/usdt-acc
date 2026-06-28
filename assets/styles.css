@@ -1935,6 +1935,20 @@ tr:last-child td {
   font-weight: 700;
 }
 
+.invite-delivery {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.invite-delivery .panel-title {
+  margin-bottom: 0;
+}
+
 .login-hint {
   margin: 14px 0 0;
   color: var(--muted);
