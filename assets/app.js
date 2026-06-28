@@ -987,6 +987,7 @@
     const syncErrors = tenantWallets().filter((wallet) => wallet.enabled && wallet.lastSyncError);
     return `
       ${pageHead("资金概况", "汇总业务已审核数据、钱包实际流水、链上余额变化和往来款概况")}
+      ${renderDashboardReferralBanner()}
       ${syncErrors.length ? `<div class="notice danger">链上同步异常：${syncErrors.map((wallet) => `${wallet.alias}（${wallet.lastSyncError}）`).join("；")}</div>` : ""}
       <div class="section-label"><h3>业务已审核</h3><span>统计已审核的普通批注和平账业务</span></div>
       <section class="dashboard-business-block">
@@ -1065,6 +1066,24 @@
         </div>
       </section>
     `;
+  }
+
+  function renderDashboardReferralBanner() {
+    const user = currentUser();
+    const tenant = currentTenant();
+    const settings = state.subscriptionSettings || {};
+    if (!["admin", "supervisor"].includes(user.role) || tenant.demo || !settings.referralEnabled) return "";
+    const rewardCoins = Number(settings.referralRewardCoins || 0);
+    const balance = starCoinBalance(tenant.id);
+    const title = user.role === "admin" ? `当前系统可参与推广有礼` : "推广有礼活动进行中";
+    return `<section class="dashboard-referral-banner">
+      <div>
+        <span class="dashboard-referral-kicker">活动</span>
+        <strong>${escapeHtml(title)}</strong>
+        <p>成功邀请新系统首次付费开通后，奖励 ${money(rewardCoins)} 个智慧星币；当前余额 ${money(balance)}。</p>
+      </div>
+      <button class="btn primary" data-nav="referral">进入推广有礼</button>
+    </section>`;
   }
 
   function dashboardPeriods(reference = new Date()) {

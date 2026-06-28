@@ -293,6 +293,43 @@ button {
   box-shadow: var(--shadow);
 }
 
+.dashboard-referral-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid #99f6e4;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #ecfdf5, #ffffff 64%, #eff6ff);
+  box-shadow: var(--shadow);
+}
+
+.dashboard-referral-banner strong {
+  display: block;
+  margin: 6px 0 4px;
+  color: var(--text);
+  font-size: 20px;
+}
+
+.dashboard-referral-banner p {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.dashboard-referral-kicker {
+  display: inline-flex;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #0f766e;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .dashboard-business-block .period-card {
   padding: 14px;
   border: 1px solid var(--line);
@@ -2431,6 +2468,20 @@ tr:last-child td {
   textarea,
   .btn {
     min-height: 42px;
+  }
+
+  .dashboard-referral-banner {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 12px;
+  }
+
+  .dashboard-referral-banner strong {
+    font-size: 18px;
+  }
+
+  .dashboard-referral-banner .btn {
+    width: 100%;
   }
 
   .two-col,
