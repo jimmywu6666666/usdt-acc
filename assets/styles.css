@@ -2127,6 +2127,100 @@ tr:last-child td {
   line-height: 1.45;
 }
 
+.referral-materials {
+  display: grid;
+  gap: 16px;
+}
+
+.referral-poster-grid,
+.referral-copy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.referral-poster-card,
+.referral-copy-card {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.referral-poster-card {
+  grid-template-rows: 1fr auto;
+}
+
+.referral-poster-preview {
+  display: grid;
+  gap: 10px;
+  min-height: 220px;
+  padding: 18px;
+  border: 1px solid #99f6e4;
+  border-radius: 8px;
+  background: linear-gradient(145deg, #ecfdf5, #ffffff 64%, #f8fafc);
+}
+
+.referral-poster-card.reward .referral-poster-preview {
+  border-color: #fed7aa;
+  background: linear-gradient(145deg, #fff7ed, #ffffff 64%, #f8fafc);
+}
+
+.referral-poster-preview span {
+  justify-self: start;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: #0f766e;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.referral-poster-card.reward .referral-poster-preview span {
+  background: #c2410c;
+}
+
+.referral-poster-preview strong {
+  max-width: 360px;
+  color: var(--text);
+  font-size: 24px;
+  line-height: 1.25;
+}
+
+.referral-poster-preview em {
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.referral-poster-preview small {
+  align-self: end;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.referral-copy-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.referral-copy-card h4 {
+  margin: 0 0 6px;
+  color: var(--text);
+  font-size: 17px;
+}
+
+.referral-copy-card p {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
 @media (max-width: 1040px) {
   .layout {
     grid-template-columns: 1fr;
@@ -2336,10 +2430,20 @@ tr:last-child td {
   .rp-stats,
   .rp-pending-row,
   .pending-business-row,
+  .referral-poster-grid,
+  .referral-copy-grid,
   .user-management-layout,
   .filters,
   .ticket-stats,
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .referral-poster-preview {
+    min-height: 190px;
+  }
+
+  .referral-copy-card {
     grid-template-columns: 1fr;
   }
 
