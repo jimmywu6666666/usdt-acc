@@ -1719,6 +1719,14 @@
         <div class="panel-title"><h3>租户管理</h3><span>无推荐人开户链接：${renderCopyText(`${location.origin}/invite`, "无推荐人开户链接")}</span></div>
         ${renderTenantManagement()}
       </section>
+      <section class="panel">
+        <div class="panel-title"><h3>智慧星币记录</h3><span>邀请奖励和抵扣续费都会留痕</span></div>
+        ${renderStarCoinLedgerAdmin()}
+      </section>
+      <section class="panel">
+        <div class="panel-title"><h3>平台收入列表</h3><span>查看租户提交哈希后的付款处理结果</span></div>
+        ${renderPlatformPayments()}
+      </section>
     `;
   }
 
@@ -1949,38 +1957,27 @@
     }
     if (currentUser().role !== "admin") return `<div class="panel empty">只有管理员或主管可以进入租用管理</div>`;
     return `
-      ${pageHead("租用管理", "配置月租费用和平台收款钱包，处理租户提交的交易哈希和异常续费")}
+      ${pageHead("租用管理", "查看租用规则、智慧星币记录和平台收入处理")}
       <section class="grid two-col">
         <div class="panel">
-          <div class="panel-title"><h3>收费设置</h3><span>平台收款钱包用于租户续费，不计入租户业务流水</span></div>
-          <form id="subscriptionSettingsForm" class="form-grid one">
-            <label>月租费用（USDT）<input name="monthlyFee" type="number" min="0.000001" step="0.000001" value="${escapeHtml(settings.monthlyFee || 100)}" required></label>
-            <label><span class="field-label">首次开通优惠价（USDT） <em class="optional-mark">填 0 关闭</em></span><input name="firstOpenFee" type="number" min="0" step="0.000001" value="${escapeHtml(settings.firstOpenFee || 0)}" required></label>
-            <label><span class="field-label">平台收款钱包地址 <em class="optional-mark">启用自动续费时填写</em></span><input name="platformWalletAddress" value="${escapeHtml(settings.platformWalletAddress || "")}" placeholder="T..."></label>
-            <label class="checkline"><input name="enabled" type="checkbox" ${settings.enabled ? "checked" : ""}> 启用交易哈希自动续费</label>
-            <p class="form-hint">勾选后，主管付款后可提交交易哈希，系统校验到账并自动续租；未开通租户可按首次优惠价开通，优惠价为 0 时按正常月租计算。</p>
-            <label class="checkline"><input name="autoDisable" type="checkbox" ${settings.autoDisable !== false ? "checked" : ""}> 到期后自动停用系统</label>
-            <label class="checkline"><input name="referralEnabled" type="checkbox" ${settings.referralEnabled ? "checked" : ""}> 启用推广有礼</label>
-            <label><span class="field-label">邀请成功奖励（智慧星币） <em class="optional-mark">首次付费开通后发放</em></span><input name="referralRewardCoins" type="number" min="0" step="0.000001" value="${escapeHtml(settings.referralRewardCoins || 0)}" required></label>
-            <div class="actions"><button class="btn primary" type="submit">保存设置</button></div>
-          </form>
+          <div class="panel-title"><h3>当前租用规则</h3><span>修改入口在系统管理</span></div>
+          <div class="metric-list">
+            <div><span>月租费用</span><strong>${money(settings.monthlyFee || 100)} USDT</strong></div>
+            <div><span>首次开通优惠价</span><strong>${Number(settings.firstOpenFee || 0) > 0 ? `${money(settings.firstOpenFee)} USDT` : "未启用"}</strong></div>
+            <div><span>交易哈希自动续费</span><strong>${settings.enabled ? "已启用" : "未启用"}</strong></div>
+            <div><span>到期后自动停用</span><strong>${settings.autoDisable !== false ? "已启用" : "未启用"}</strong></div>
+            <div><span>推广有礼</span><strong>${settings.referralEnabled ? `已启用 · ${money(settings.referralRewardCoins || 0)} 智慧星币` : "未启用"}</strong></div>
+          </div>
         </div>
         <div class="panel">
-          <div class="panel-title"><h3>识别规则</h3></div>
+          <div class="panel-title"><h3>收款与识别</h3><span>和租户续费页面保持一致</span></div>
           <div class="metric-list">
+            <div><span>平台收款钱包</span><strong>${settings.platformWalletAddress ? renderCopyText(settings.platformWalletAddress, "平台收款钱包") : "管理员暂未配置"}</strong></div>
             <div><span>租户识别</span><strong>主管提交交易哈希</strong></div>
             <div><span>防重复</span><strong>同一交易哈希只能处理一次</strong></div>
             <div><span>异常处理</span><strong>未通过自动校验的付款进入平台收入列表处理</strong></div>
           </div>
         </div>
-      </section>
-      <section class="panel">
-        <div class="panel-title"><h3>智慧星币记录</h3><span>邀请奖励和抵扣续费都会留痕</span></div>
-        ${renderStarCoinLedgerAdmin()}
-      </section>
-      <section class="panel">
-        <div class="panel-title"><h3>平台收入列表</h3><span>查看租户提交哈希后的付款处理结果</span></div>
-        ${renderPlatformPayments()}
       </section>
     `;
   }
@@ -2055,7 +2052,7 @@
     const canRedeem = currentUser().role === "supervisor" && settings.referralEnabled;
     return `
       ${pageHead("推广有礼", currentUser().role === "admin" ? `查看「${tenant.name}」的推广链接、智慧星币和邀请记录` : "邀请新客户开通系统，首次付费开通后获得智慧星币")}
-      ${!settings.referralEnabled ? `<div class="notice chain-status-off">推广有礼暂未开启。管理员可在“租用管理”的收费设置中启用。</div>` : ""}
+      ${!settings.referralEnabled ? `<div class="notice chain-status-off">推广有礼暂未开启。管理员可在“系统管理”的收费设置中启用。</div>` : ""}
       <section class="grid two-col">
         <div class="panel referral-summary-card">
           <div class="panel-title"><h3>智慧星币余额</h3><span>1 智慧星币 = 1 USDT</span></div>
@@ -2442,8 +2439,9 @@
 
   function renderAdmin() {
     if (currentUser().role !== "admin") return `<div class="panel empty">只有管理员可以进入系统管理</div>`;
+    const settings = state.subscriptionSettings || {};
     return `
-      ${pageHead("系统管理", "维护系统级限制和统一收支分类")}
+      ${pageHead("系统管理", "维护系统级限制、收费设置和统一收支分类")}
       <section class="grid two-col">
         <div class="panel"><div class="panel-title"><h3>钱包启用限制</h3><span>按每个系统单独计算</span></div>
           <form id="systemSettingsForm" class="form-grid one">
@@ -2458,6 +2456,30 @@
             <div><span>开通系统和租户状态</span><strong>租户管理</strong></div>
             <div><span>租用收费和续费</span><strong>租用管理</strong></div>
             <div><span>服务器性能和备份</span><strong>服务器管理</strong></div>
+          </div>
+        </div>
+      </section>
+      <section class="grid two-col">
+        <div class="panel">
+          <div class="panel-title"><h3>收费设置</h3><span>平台收款钱包用于租户续费，不计入租户业务流水</span></div>
+          <form id="subscriptionSettingsForm" class="form-grid one">
+            <label>月租费用（USDT）<input name="monthlyFee" type="number" min="0.000001" step="0.000001" value="${escapeHtml(settings.monthlyFee || 100)}" required></label>
+            <label><span class="field-label">首次开通优惠价（USDT） <em class="optional-mark">填 0 关闭</em></span><input name="firstOpenFee" type="number" min="0" step="0.000001" value="${escapeHtml(settings.firstOpenFee || 0)}" required></label>
+            <label><span class="field-label">平台收款钱包地址 <em class="optional-mark">启用自动续费时填写</em></span><input name="platformWalletAddress" value="${escapeHtml(settings.platformWalletAddress || "")}" placeholder="T..."></label>
+            <label class="checkline"><input name="enabled" type="checkbox" ${settings.enabled ? "checked" : ""}> 启用交易哈希自动续费</label>
+            <p class="form-hint">勾选后，主管付款后可提交交易哈希，系统校验到账并自动续租；未开通租户可按首次优惠价开通，优惠价为 0 时按正常月租计算。</p>
+            <label class="checkline"><input name="autoDisable" type="checkbox" ${settings.autoDisable !== false ? "checked" : ""}> 到期后自动停用系统</label>
+            <label class="checkline"><input name="referralEnabled" type="checkbox" ${settings.referralEnabled ? "checked" : ""}> 启用推广有礼</label>
+            <label><span class="field-label">邀请成功奖励（智慧星币） <em class="optional-mark">首次付费开通后发放</em></span><input name="referralRewardCoins" type="number" min="0" step="0.000001" value="${escapeHtml(settings.referralRewardCoins || 0)}" required></label>
+            <div class="actions"><button class="btn primary" type="submit">保存设置</button></div>
+          </form>
+        </div>
+        <div class="panel">
+          <div class="panel-title"><h3>识别规则</h3></div>
+          <div class="metric-list">
+            <div><span>租户识别</span><strong>主管提交交易哈希</strong></div>
+            <div><span>防重复</span><strong>同一交易哈希只能处理一次</strong></div>
+            <div><span>异常处理</span><strong>未通过自动校验的付款进入平台收入列表处理</strong></div>
           </div>
         </div>
       </section>
