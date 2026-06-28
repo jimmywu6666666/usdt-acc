@@ -923,11 +923,12 @@
       ["logs", "操作日志"],
     ];
     if (["admin", "supervisor"].includes(role)) nav.splice(2, 0, ["review", "审核中心"]);
-    if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["users", "账号管理"]);
-    if (role === "admin") nav.splice(-1, 0, ["tenants", "租户管理"]);
+    if (role === "supervisor") nav.splice(-1, 0, ["users", "账号管理"]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["subscription", role === "admin" ? "租用管理" : "租用续费"]);
     if ((role === "admin" || (role === "supervisor" && state.subscriptionSettings?.referralEnabled)) && !currentTenant()?.demo) nav.splice(-1, 0, ["referral", `推广有礼 <span class="nav-tag">活动</span>`]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["tickets", "工单中心"]);
+    if (role === "admin") nav.splice(-1, 0, ["users", "账号管理"]);
+    if (role === "admin") nav.splice(-1, 0, ["tenants", "租户管理"]);
     if (role === "admin") nav.splice(-1, 0, ["admin", "系统管理"]);
     if (role === "admin") nav.splice(-1, 0, ["server", "服务器管理"]);
     nav.splice(-1, 0, ["profile", "我的账号"]);
