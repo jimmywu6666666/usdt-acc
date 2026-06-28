@@ -3445,6 +3445,7 @@
     const title = options.title || "登录密钥绑定信息";
     const desc = options.desc || "请把登录密钥保存到验证器；关闭后页面不再显示完整密钥。";
     const deliveryText = [
+      options.loginUrl ? `登录网址：${options.loginUrl}` : "",
       `登录账号：${setup.loginName || ""}`,
       options.password ? `初始密码：${options.password}` : "",
       `登录密钥：${setup.secret}`,
@@ -3454,6 +3455,7 @@
       desc,
       body: `
         <section class="annotation-modal-summary account-delivery-summary">
+          ${options.loginUrl ? accountDeliveryField("登录网址", options.loginUrl, true) : ""}
           ${accountDeliveryField("登录账号", setup.loginName || "-")}
           ${options.password ? accountDeliveryField("初始密码", options.password) : ""}
           ${accountDeliveryField("登录密钥", setup.secret, true)}
@@ -3663,6 +3665,7 @@
         title: "主管账号交付信息",
         desc: "请把主管登录账号、初始密码和登录密钥交给对应人员；关闭后页面不再显示完整密钥。",
         password: data.supervisorPassword,
+        loginUrl: location.origin,
       });
     } catch (error) {
       toast(error.message);
