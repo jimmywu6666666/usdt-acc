@@ -163,6 +163,31 @@ button {
   color: var(--primary-dark);
 }
 
+.nav-btn[data-nav="referral"] {
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
+  font-weight: 800;
+}
+
+.nav-btn[data-nav="referral"].active,
+.nav-btn[data-nav="referral"]:hover {
+  border-color: #fdba74;
+  background: #ffedd5;
+  color: #7c2d12;
+}
+
+.nav-tag {
+  margin-left: auto;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #ea580c;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 800;
+}
+
 .main {
   padding: 22px;
   min-width: 0;
@@ -2089,6 +2114,17 @@ tr:last-child td {
 
 .referral-summary-card .btn {
   margin-top: 12px;
+}
+
+.referral-reward-note {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-weight: 800;
+  line-height: 1.45;
 }
 
 @media (max-width: 1040px) {

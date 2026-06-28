@@ -810,7 +810,7 @@
 
   function render() {
     const app = document.querySelector("#app");
-    if (isInvitePage() && !session?.token) {
+    if (isInvitePage()) {
       stopAutoRefresh();
       app.innerHTML = renderInvitePage();
       bindInviteEvents();
@@ -917,7 +917,7 @@
     if (["admin", "supervisor"].includes(role)) nav.splice(2, 0, ["review", "审核中心"]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["users", "账号管理"]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["subscription", role === "admin" ? "租用管理" : "租用续费"]);
-    if ((role === "admin" || (role === "supervisor" && state.subscriptionSettings?.referralEnabled)) && !currentTenant()?.demo) nav.splice(-1, 0, ["referral", "推广有礼"]);
+    if ((role === "admin" || (role === "supervisor" && state.subscriptionSettings?.referralEnabled)) && !currentTenant()?.demo) nav.splice(-1, 0, ["referral", `推广有礼 <span class="nav-tag">活动</span>`]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["tickets", "工单中心"]);
     if (role === "admin") nav.splice(-1, 0, ["admin", "系统管理"]);
     if (role === "admin") nav.splice(-1, 0, ["server", "服务器管理"]);
@@ -2038,6 +2038,7 @@
     if (!settings.referralEnabled && currentUser().role !== "admin") return `<div class="panel empty">推广有礼暂未开启</div>`;
     const balance = starCoinBalance(tenant.id);
     const monthlyFee = Number(settings.monthlyFee || 0);
+    const rewardCoins = Number(settings.referralRewardCoins || 0);
     const inviteUrl = `${location.origin}/invite/${tenant.referralCode || ""}`;
     const applications = (state.referralApplications || []).filter((item) => item.referrerTenantId === tenant.id);
     const ledger = (state.starCoinLedger || []).filter((item) => item.tenantId === tenant.id);
@@ -2049,6 +2050,7 @@
         <div class="panel referral-summary-card">
           <div class="panel-title"><h3>智慧星币余额</h3><span>1 智慧星币 = 1 USDT</span></div>
           <div class="metric-main">${money(balance)}</div>
+          <div class="referral-reward-note">成功邀请 1 个新系统首次付费开通后，奖励 ${money(rewardCoins)} 个智慧星币。</div>
           <p class="muted">当前月租 ${money(monthlyFee)} USDT，可按整月抵扣续费。</p>
           ${canRedeem ? `<button class="btn primary" data-action="redeem-star-coins" ${balance + 0.000001 < monthlyFee ? "disabled" : ""}>使用智慧星币续费</button>` : `<p class="muted">管理员账号仅查看；智慧星币续费由租户主管在本页面操作。</p>`}
         </div>
