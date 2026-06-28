@@ -924,6 +924,7 @@
     ];
     if (["admin", "supervisor"].includes(role)) nav.splice(2, 0, ["review", "审核中心"]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["users", "账号管理"]);
+    if (role === "admin") nav.splice(-1, 0, ["tenants", "租户管理"]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["subscription", role === "admin" ? "租用管理" : "租用续费"]);
     if ((role === "admin" || (role === "supervisor" && state.subscriptionSettings?.referralEnabled)) && !currentTenant()?.demo) nav.splice(-1, 0, ["referral", `推广有礼 <span class="nav-tag">活动</span>`]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["tickets", "工单中心"]);
@@ -938,6 +939,7 @@
     const role = currentUser().role;
     if (state.activeView === "review" && !["admin", "supervisor"].includes(role)) state.activeView = "dashboard";
     if (state.activeView === "users" && !["admin", "supervisor"].includes(role)) state.activeView = "dashboard";
+    if (state.activeView === "tenants" && role !== "admin") state.activeView = "dashboard";
     if (state.activeView === "admin" && role !== "admin") state.activeView = "dashboard";
     if (state.activeView === "server" && role !== "admin") state.activeView = "dashboard";
     if (state.activeView === "subscription" && !["admin", "supervisor"].includes(role)) state.activeView = "dashboard";
@@ -952,6 +954,7 @@
       wallets: renderWallets,
       reconcile: renderChain,
       users: renderUsers,
+      tenants: renderTenants,
       admin: renderAdmin,
       subscription: renderSubscription,
       referral: renderReferral,
@@ -1665,7 +1668,7 @@
     const role = currentUser().role;
     const canCreate = role === "supervisor";
     const desc = role === "admin"
-      ? "开通和管理租户，维护主管账号、登录密码和登录密钥"
+      ? "开通系统，维护主管账号、登录密码和登录密钥"
       : "主管可创建员工或主管账号，并设置员工是否可查看全部账目";
     if (role === "admin") {
       return `
@@ -1684,10 +1687,6 @@
             <div class="panel-title"><h3>账号筛选</h3><span>默认只看启用中的系统里的主管账号</span></div>
             ${renderAccountFilters()}
           </div>
-        </section>
-        <section class="panel">
-          <div class="panel-title"><h3>租户管理</h3><span>查看各系统状态、主管、钱包和流水规模</span></div>
-          ${renderTenantManagement()}
         </section>
         <section class="panel">${renderUserTable()}</section>
         <section class="panel">
@@ -1710,6 +1709,17 @@
           </form>
         </div><div class="panel">${renderUserTable()}</div>
       </section>` : `<div class="panel">${renderUserTable()}</div>`}
+    `;
+  }
+
+  function renderTenants() {
+    if (currentUser().role !== "admin") return `<div class="panel empty">只有管理员可以进入租户管理</div>`;
+    return `
+      ${pageHead("租户管理", "统一查看租户来源、租用状态、主管、钱包和流水规模")}
+      <section class="panel">
+        <div class="panel-title"><h3>租户管理</h3><span>无推荐人开户链接：${renderCopyText(`${location.origin}/invite`, "无推荐人开户链接")}</span></div>
+        ${renderTenantManagement()}
+      </section>
     `;
   }
 
@@ -1966,14 +1976,6 @@
         </div>
       </section>
       <section class="panel">
-        <div class="panel-title"><h3>租户租用状态</h3><span>可对体外收费或异常付款直接手工续费</span></div>
-        ${renderSubscriptionTenants()}
-      </section>
-      <section class="panel">
-        <div class="panel-title"><h3>开户注册申请</h3><span>无推荐人开户链接：${renderCopyText(`${location.origin}/invite`, "无推荐人开户链接")}</span></div>
-        ${renderReferralApplicationsAdmin()}
-      </section>
-      <section class="panel">
         <div class="panel-title"><h3>智慧星币记录</h3><span>邀请奖励和抵扣续费都会留痕</span></div>
         ${renderStarCoinLedgerAdmin()}
       </section>
@@ -2143,8 +2145,11 @@
       .toFixed(6));
   }
 
-  function renderReferralApplicationsAdmin() {
-    const applications = (state.referralApplications || []).slice().sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+  function renderReferralApplicationsAdmin({ pendingOnly = false } = {}) {
+    const applications = (state.referralApplications || [])
+      .filter((application) => !pendingOnly || application.status === "pending")
+      .slice()
+      .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
     const rows = applications.map((application) => {
       const pending = application.status === "pending";
       return `<tr>
@@ -2476,33 +2481,61 @@
   }
 
   function renderTenantManagement() {
+    const pendingApplications = (state.referralApplications || []).filter((application) => application.status === "pending");
     const rows = state.tenants.filter((tenant) => !tenant.demo).map((tenant) => {
       const users = state.users.filter((item) => item.tenantId === tenant.id);
       const wallets = state.wallets.filter((item) => item.tenantId === tenant.id);
       const transactions = state.chainTransactions.filter((item) => item.tenantId === tenant.id);
       const annotations = state.annotations.filter((item) => item.tenantId === tenant.id);
       const supervisors = users.filter((item) => item.role === "supervisor").map((item) => item.name).join("、") || "-";
+      const application = referralApplicationForTenant(tenant.id);
       return `<tr>
-        <td><strong>${escapeHtml(tenant.name)}</strong></td>
+        <td><strong>${escapeHtml(tenant.name)}</strong>${renderTenantSignupSource(application)}</td>
         <td>${badge({ enabled: ["启用", "green"], disabled: ["停用", "red"] }, tenant.enabled ? "enabled" : "disabled")}</td>
-        <td>${formatDate(tenant.subscriptionExpiresAt)}</td>
-        <td>${escapeHtml(supervisors)}</td>
+        <td>${formatDate(tenant.subscriptionExpiresAt)}<br><span class="muted">${escapeHtml(subscriptionStatusText(tenant))}</span></td>
+        <td>${escapeHtml(supervisors)}${renderTenantSignupContact(application)}</td>
         <td>${users.filter((item) => item.role === "employee").length}</td>
         <td>${wallets.length} / 启用 ${wallets.filter((item) => item.enabled).length}</td>
         <td>${transactions.length}</td>
         <td>${annotations.length}</td>
+        <td>${tenant.lastPaymentTxHash ? renderCopyHash(tenant.lastPaymentTxHash, { short: true }) : "-"}</td>
         <td>${formatDate(tenant.createdAt)}</td>
         <td>
-          <button class="btn small ${tenant.enabled ? "danger" : "primary"}" data-tenant-status="${tenant.id}" data-enabled="${tenant.enabled ? "false" : "true"}">
-            ${tenant.enabled ? "停用" : "启用"}
-          </button>
+          <div class="row-actions">
+            <button class="btn small ${tenant.enabled ? "danger" : "primary"}" data-tenant-status="${tenant.id}" data-enabled="${tenant.enabled ? "false" : "true"}">
+              ${tenant.enabled ? "停用" : "启用"}
+            </button>
+            <button class="btn small primary" data-tenant-manual-renew="${tenant.id}">手工续费</button>
+          </div>
         </td>
       </tr>`;
     }).join("");
-    return `<div class="table-wrap"><table>
-      <thead><tr><th>系统</th><th>状态</th><th>到期时间</th><th>主管</th><th>员工数</th><th>钱包</th><th>链上流水</th><th>批注</th><th>创建时间</th><th>操作</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="10" class="empty slim">暂无独立系统</td></tr>`}</tbody>
+    return `${pendingApplications.length ? `<div class="tenant-pending-applications">
+      <div class="panel-title compact"><h3>待处理开户注册</h3><span>历史待处理申请保留在这里处理</span></div>
+      ${renderReferralApplicationsAdmin({ pendingOnly: true })}
+    </div>` : ""}
+    <div class="table-wrap"><table>
+      <thead><tr><th>系统</th><th>状态</th><th>到期/租用</th><th>主管</th><th>员工数</th><th>钱包</th><th>链上流水</th><th>批注</th><th>最近付款</th><th>创建时间</th><th>操作</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="11" class="empty slim">暂无独立系统</td></tr>`}</tbody>
     </table></div>`;
+  }
+
+  function referralApplicationForTenant(tenantId) {
+    return (state.referralApplications || [])
+      .filter((application) => application.tenantId === tenantId)
+      .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt))[0] || null;
+  }
+
+  function renderTenantSignupSource(application) {
+    if (!application) return `<br><span class="muted">后台开通</span>`;
+    const source = application.referrerTenantId ? `推荐人：${tenantName(application.referrerTenantId)}` : "无推荐人开户";
+    const note = application.note ? ` · ${application.note}` : "";
+    return `<br><span class="muted">${escapeHtml(source)}${escapeHtml(note)}</span>`;
+  }
+
+  function renderTenantSignupContact(application) {
+    if (!application?.contact) return "";
+    return `<br><span class="muted">${escapeHtml(application.contact)}</span>`;
   }
 
   function renderCategoryList(type, title) {

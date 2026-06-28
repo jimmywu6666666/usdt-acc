@@ -1118,6 +1118,16 @@ button {
   min-width: 0;
 }
 
+.panel-title.compact {
+  margin: 4px 0 8px;
+}
+
+.tenant-pending-applications {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
