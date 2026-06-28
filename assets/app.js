@@ -890,7 +890,7 @@
             <label>主管姓名<input name="supervisorName" required placeholder="用于登录后显示"></label>
             <label>登录账号<input name="supervisorLoginName" required autocomplete="off" placeholder="3-32 位字母或数字"></label>
             <label>初始密码<input name="supervisorPassword" type="password" required minlength="6" placeholder="至少 6 位"></label>
-            <label><span class="field-label">联系方式 <em class="optional-mark">选填</em></span><input name="contact" placeholder="tg"></label>
+            <label><span class="field-label">联系方式 <em class="optional-mark">选填</em></span><input name="contact" placeholder="Telegram"></label>
             <label><span class="field-label">备注 <em class="optional-mark">选填</em></span><textarea name="note" rows="3" placeholder="补充说明"></textarea></label>
             <button class="btn primary" type="submit">提交开通申请</button>
           </form>
