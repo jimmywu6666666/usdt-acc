@@ -1979,6 +1979,10 @@
           </div>
         </div>
       </section>
+      <section class="panel">
+        <div class="panel-title"><h3>当前系统续费提交记录</h3><span>仅显示「${escapeHtml(currentTenant().name)}」的记录</span></div>
+        ${renderSupervisorSubscriptionHistory()}
+      </section>
     `;
   }
 
@@ -2018,7 +2022,8 @@
   }
 
   function renderSupervisorSubscriptionHistory() {
-    const payments = (state.platformPayments || []).slice().sort((left, right) => {
+    const tenantId = currentTenant().id;
+    const payments = (state.platformPayments || []).filter((payment) => payment.tenantId === tenantId).slice().sort((left, right) => {
       const leftTime = left.chainTime || left.createdAt || "";
       const rightTime = right.chainTime || right.createdAt || "";
       return new Date(rightTime) - new Date(leftTime);
