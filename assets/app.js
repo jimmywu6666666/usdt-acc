@@ -855,7 +855,7 @@
   }
 
   function isInvitePage() {
-    return location.pathname.startsWith("/invite/");
+    return location.pathname === "/invite" || location.pathname === "/invite/" || location.pathname.startsWith("/invite/");
   }
 
   function renderLogin() {
