@@ -1668,25 +1668,14 @@
     const role = currentUser().role;
     const canCreate = role === "supervisor";
     const desc = role === "admin"
-      ? "开通系统，维护主管账号、登录密码和登录密钥"
+      ? "维护主管账号、登录密码和登录密钥"
       : "主管可创建员工或主管账号，并设置员工是否可查看全部账目";
     if (role === "admin") {
       return `
         ${pageHead("账号管理", desc)}
-        <section class="grid two-col">
-          <div class="panel"><div class="panel-title"><h3>开通独立系统</h3></div>
-            <form id="tenantForm" class="form-grid one">
-              <label>系统名称<input name="name" required></label>
-              <label>首位主管姓名<input name="supervisorName" required></label>
-              <label>主管登录账号<input name="supervisorLoginName" autocomplete="off" required placeholder="3-32 位字母、数字或 _ . @ -"></label>
-              <label>主管初始密码<input name="supervisorPassword" type="password" autocomplete="new-password" minlength="6" required placeholder="至少 6 位"></label>
-              <div class="actions"><button class="btn primary" type="submit">开通系统</button></div>
-            </form>
-          </div>
-          <div class="panel">
-            <div class="panel-title"><h3>账号筛选</h3><span>默认只看启用中的系统里的主管账号</span></div>
-            ${renderAccountFilters()}
-          </div>
+        <section class="panel">
+          <div class="panel-title"><h3>账号筛选</h3><span>默认只看启用中的系统里的主管账号</span></div>
+          ${renderAccountFilters()}
         </section>
         <section class="panel">${renderUserTable()}</section>
         <section class="panel">
@@ -1716,6 +1705,16 @@
     if (currentUser().role !== "admin") return `<div class="panel empty">只有管理员可以进入租户管理</div>`;
     return `
       ${pageHead("租户管理", "统一查看租户来源、租用状态、主管、钱包和流水规模")}
+      <section class="panel">
+        <div class="panel-title"><h3>开通独立系统</h3><span>新系统创建后会生成首位主管账号</span></div>
+        <form id="tenantForm" class="form-grid">
+          <label>系统名称<input name="name" required></label>
+          <label>首位主管姓名<input name="supervisorName" required></label>
+          <label>主管登录账号<input name="supervisorLoginName" autocomplete="off" required placeholder="3-32 位字母、数字或 _ . @ -"></label>
+          <label>主管初始密码<input name="supervisorPassword" type="password" autocomplete="new-password" minlength="6" required placeholder="至少 6 位"></label>
+          <div class="actions"><button class="btn primary" type="submit">开通系统</button></div>
+        </form>
+      </section>
       <section class="panel">
         <div class="panel-title"><h3>租户管理</h3><span>无推荐人开户链接：${renderCopyText(`${location.origin}/invite`, "无推荐人开户链接")}</span></div>
         ${renderTenantManagement()}
@@ -2456,7 +2455,7 @@
         <div class="panel">
           <div class="panel-title"><h3>管理入口</h3></div>
           <div class="metric-list">
-            <div><span>开通系统和租户状态</span><strong>账号管理</strong></div>
+            <div><span>开通系统和租户状态</span><strong>租户管理</strong></div>
             <div><span>租用收费和续费</span><strong>租用管理</strong></div>
             <div><span>服务器性能和备份</span><strong>服务器管理</strong></div>
           </div>
