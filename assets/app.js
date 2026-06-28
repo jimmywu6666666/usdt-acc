@@ -924,7 +924,7 @@
     ];
     if (["admin", "supervisor"].includes(role)) nav.splice(2, 0, ["review", "审核中心"]);
     if (role === "supervisor") nav.splice(-1, 0, ["users", "账号管理"]);
-    if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["subscription", role === "admin" ? "租用管理" : "租用续费"]);
+    if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["subscription", "租用续费"]);
     if ((role === "admin" || (role === "supervisor" && state.subscriptionSettings?.referralEnabled)) && !currentTenant()?.demo) nav.splice(-1, 0, ["referral", `推广有礼 <span class="nav-tag">活动</span>`]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["tickets", "工单中心"]);
     if (role === "admin") nav.splice(-1, 0, ["users", "账号管理"]);
@@ -1956,9 +1956,9 @@
         </section>
       `;
     }
-    if (currentUser().role !== "admin") return `<div class="panel empty">只有管理员或主管可以进入租用管理</div>`;
+    if (currentUser().role !== "admin") return `<div class="panel empty">只有管理员或主管可以进入租用续费</div>`;
     return `
-      ${pageHead("租用管理", "查看租用规则、智慧星币记录和平台收入处理")}
+      ${pageHead("租用续费", "查看当前系统租用规则、收款识别和续费提交记录")}
       <section class="grid two-col">
         <div class="panel">
           <div class="panel-title"><h3>当前租用规则</h3><span>修改入口在系统管理</span></div>
