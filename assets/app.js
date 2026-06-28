@@ -2503,7 +2503,7 @@
         <td>${formatDate(tenant.subscriptionExpiresAt)}<br><span class="muted">${escapeHtml(subscriptionStatusText(tenant))}</span></td>
         <td>${escapeHtml(supervisors)}${renderTenantSignupContact(application)}</td>
         <td>${users.filter((item) => item.role === "employee").length}</td>
-        <td>${wallets.length} / 启用 ${wallets.filter((item) => item.enabled).length}</td>
+        <td>${renderTenantWalletOverview(wallets)}</td>
         <td>${transactions.length}</td>
         <td>${annotations.length}</td>
         <td>${tenant.lastPaymentTxHash ? renderCopyHash(tenant.lastPaymentTxHash, { short: true }) : "-"}</td>
@@ -2544,6 +2544,17 @@
   function renderTenantSignupContact(application) {
     if (!application?.contact) return "";
     return `<br><span class="muted">${escapeHtml(application.contact)}</span>`;
+  }
+
+  function renderTenantWalletOverview(wallets) {
+    if (!wallets.length) return `<span class="muted">暂无钱包</span>`;
+    const enabledCount = wallets.filter((wallet) => wallet.enabled).length;
+    const details = wallets.slice(0, 3).map((wallet) => {
+      const status = wallet.enabled ? "启用" : "停用";
+      return `${wallet.alias}（${status}，${money(chainBalance(wallet.id))}）`;
+    });
+    const more = wallets.length > details.length ? `；另有 ${wallets.length - details.length} 个` : "";
+    return `<strong>${wallets.length} 个 / 启用 ${enabledCount}</strong><br><span class="muted">${escapeHtml(details.join("；") + more)}</span>`;
   }
 
   function renderCategoryList(type, title) {
