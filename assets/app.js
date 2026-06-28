@@ -885,7 +885,7 @@
           <div class="notice" data-invite-status>${code ? "正在读取推荐信息..." : "平台开户申请，请填写开户注册信息。"}</div>
           <form id="inviteApplicationForm" class="form-grid one" hidden>
             <input type="hidden" name="referralCode" value="${escapeHtml(code)}">
-            <label>推荐来源<input name="referrerName" readonly value="${code ? "" : "平台开户"}"></label>
+            <label data-referrer-field ${code ? "" : "hidden"}>推荐人<input name="referrerName" readonly value=""></label>
             <label>系统名称<input name="name" required placeholder="例如：某某团队"></label>
             <label>主管姓名<input name="supervisorName" required placeholder="用于登录后显示"></label>
             <label>登录账号<input name="supervisorLoginName" required autocomplete="off" placeholder="3-32 位字母或数字"></label>
@@ -3201,7 +3201,7 @@
     if (!status || !form) return;
     if (!code) {
       form.hidden = false;
-      form.elements.referrerName.value = "平台开户";
+      form.querySelector("[data-referrer-field]")?.setAttribute("hidden", "");
       status.className = "notice success";
       status.textContent = "平台开户申请，请填写开户注册信息。";
       return;
@@ -3211,6 +3211,7 @@
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "推荐链接不可用");
       form.hidden = false;
+      form.querySelector("[data-referrer-field]")?.removeAttribute("hidden");
       form.elements.referrerName.value = payload.invite?.referrerName || "";
       status.className = "notice success";
       status.textContent = `推荐人：${payload.invite?.referrerName || "-"}。请填写开户注册信息。`;
