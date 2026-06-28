@@ -2063,16 +2063,8 @@
           </div>
           <p class="muted">客户通过该链接提交申请后，平台管理员开通系统；客户首次付费开通成功后发放奖励。</p>
         </div>
-        <div class="panel">
-          <div class="panel-title"><h3>演示地址</h3><span>发送给客户先体验系统</span></div>
-          <div class="copy-box">
-            <strong>${escapeHtml(demoUrl)}</strong>
-            <button class="btn small" data-copy-text="${escapeHtml(demoUrl)}">复制地址</button>
-          </div>
-          <p class="muted">客户可先领取演示账号体验现金流台账、批注审核、往来款和平账等核心功能。</p>
-        </div>
       </section>
-      ${renderReferralMaterialsEntry(inviteUrl)}
+      ${renderReferralPromotionTools({ inviteUrl, demoUrl })}
       <section class="panel">
         <div class="panel-title"><h3>邀请记录</h3><span>只显示通过你的链接提交的申请</span></div>
         ${renderReferralApplicationsForTenant(applications)}
@@ -2084,16 +2076,26 @@
     `;
   }
 
-  function renderReferralMaterialsEntry(inviteUrl) {
+  function renderReferralPromotionTools({ inviteUrl, demoUrl }) {
     const adUrl = `/ad?invite=${encodeURIComponent(inviteUrl)}`;
-    return `<section class="panel referral-materials">
-      <div class="referral-material-entry">
-        <div>
-          <span class="referral-material-kicker">推广素材库</span>
-          <h3>打开宣传图和推广文案</h3>
-          <p>素材页包含 4 套推广海报和对应文案，可复制图片、复制带专属开户链接的文案，也可以直接下载海报。</p>
+    return `<section class="grid two-col referral-tools-row">
+      <div class="panel referral-materials">
+        <div class="referral-material-entry">
+          <div>
+            <span class="referral-material-kicker">推广素材库</span>
+            <h3>打开宣传图和推广文案</h3>
+            <p>素材页包含 4 套推广海报和对应文案，可复制图片、复制带专属开户链接的文案，也可以直接下载海报。</p>
+          </div>
+          <a class="btn primary" href="${escapeHtml(adUrl)}" target="_blank" rel="noopener">打开素材库</a>
         </div>
-        <a class="btn primary" href="${escapeHtml(adUrl)}" target="_blank" rel="noopener">打开素材库</a>
+      </div>
+      <div class="panel referral-demo-card">
+        <div class="panel-title"><h3>演示地址</h3><span>发送给客户先体验系统</span></div>
+        <div class="copy-box">
+          <strong>${escapeHtml(demoUrl)}</strong>
+          <button class="btn small" data-copy-text="${escapeHtml(demoUrl)}">复制地址</button>
+        </div>
+        <p class="muted">客户可先领取演示账号体验现金流台账、批注审核、往来款和平账等核心功能。</p>
       </div>
     </section>`;
   }
