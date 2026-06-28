@@ -2165,6 +2165,11 @@ tr:last-child td {
   background: linear-gradient(135deg, #ecfdf5, #ffffff 62%, #f8fafc);
 }
 
+.referral-demo-card {
+  border-color: #bfdbfe;
+  background: linear-gradient(135deg, #eff6ff, #ffffff 62%, #f8fafc);
+}
+
 .referral-material-entry {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
