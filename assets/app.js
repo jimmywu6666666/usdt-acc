@@ -2040,6 +2040,7 @@
     const monthlyFee = Number(settings.monthlyFee || 0);
     const rewardCoins = Number(settings.referralRewardCoins || 0);
     const inviteUrl = `${location.origin}/invite/${tenant.referralCode || ""}`;
+    const demoUrl = `${location.origin}/demo`;
     const applications = (state.referralApplications || []).filter((item) => item.referrerTenantId === tenant.id);
     const ledger = (state.starCoinLedger || []).filter((item) => item.tenantId === tenant.id);
     const canRedeem = currentUser().role === "supervisor" && settings.referralEnabled;
@@ -2061,6 +2062,14 @@
             <button class="btn small" data-copy-text="${escapeHtml(inviteUrl)}">复制链接</button>
           </div>
           <p class="muted">客户通过该链接提交申请后，平台管理员开通系统；客户首次付费开通成功后发放奖励。</p>
+        </div>
+        <div class="panel">
+          <div class="panel-title"><h3>演示地址</h3><span>发送给客户先体验系统</span></div>
+          <div class="copy-box">
+            <strong>${escapeHtml(demoUrl)}</strong>
+            <button class="btn small" data-copy-text="${escapeHtml(demoUrl)}">复制地址</button>
+          </div>
+          <p class="muted">客户可先领取演示账号体验现金流台账、批注审核、往来款和平账等核心功能。</p>
         </div>
       </section>
       ${renderReferralMaterialsEntry(inviteUrl)}
