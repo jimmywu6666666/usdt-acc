@@ -2128,50 +2128,20 @@ tr:last-child td {
 }
 
 .referral-materials {
+  border-color: #99f6e4;
+  background: linear-gradient(135deg, #ecfdf5, #ffffff 62%, #f8fafc);
+}
+
+.referral-material-entry {
   display: grid;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
 }
 
-.referral-poster-grid,
-.referral-copy-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.referral-poster-card,
-.referral-copy-card {
-  display: grid;
-  gap: 12px;
-  align-content: start;
-  min-width: 0;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #ffffff;
-}
-
-.referral-poster-card {
-  grid-template-rows: 1fr auto;
-}
-
-.referral-poster-preview {
-  display: grid;
-  gap: 10px;
-  min-height: 220px;
-  padding: 18px;
-  border: 1px solid #99f6e4;
-  border-radius: 8px;
-  background: linear-gradient(145deg, #ecfdf5, #ffffff 64%, #f8fafc);
-}
-
-.referral-poster-card.reward .referral-poster-preview {
-  border-color: #fed7aa;
-  background: linear-gradient(145deg, #fff7ed, #ffffff 64%, #f8fafc);
-}
-
-.referral-poster-preview span {
-  justify-self: start;
+.referral-material-kicker {
+  display: inline-flex;
+  margin-bottom: 8px;
   padding: 5px 9px;
   border-radius: 6px;
   background: #0f766e;
@@ -2180,45 +2150,18 @@ tr:last-child td {
   font-weight: 800;
 }
 
-.referral-poster-card.reward .referral-poster-preview span {
-  background: #c2410c;
-}
-
-.referral-poster-preview strong {
-  max-width: 360px;
+.referral-material-entry h3 {
+  margin: 0 0 8px;
   color: var(--text);
-  font-size: 24px;
-  line-height: 1.25;
+  font-size: 22px;
 }
 
-.referral-poster-preview em {
-  color: var(--muted);
-  font-style: normal;
-  font-weight: 800;
-  line-height: 1.5;
-}
-
-.referral-poster-preview small {
-  align-self: end;
-  color: var(--muted);
-  font-weight: 700;
-}
-
-.referral-copy-card {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-}
-
-.referral-copy-card h4 {
-  margin: 0 0 6px;
-  color: var(--text);
-  font-size: 17px;
-}
-
-.referral-copy-card p {
+.referral-material-entry p {
+  max-width: 760px;
   margin: 0;
   color: var(--muted);
   font-weight: 700;
+  line-height: 1.6;
 }
 
 @media (max-width: 1040px) {
@@ -2430,8 +2373,7 @@ tr:last-child td {
   .rp-stats,
   .rp-pending-row,
   .pending-business-row,
-  .referral-poster-grid,
-  .referral-copy-grid,
+  .referral-material-entry,
   .user-management-layout,
   .filters,
   .ticket-stats,
@@ -2439,12 +2381,8 @@ tr:last-child td {
     grid-template-columns: 1fr;
   }
 
-  .referral-poster-preview {
-    min-height: 190px;
-  }
-
-  .referral-copy-card {
-    grid-template-columns: 1fr;
+  .referral-material-entry .btn {
+    width: 100%;
   }
 
   .wallet-list-panel {

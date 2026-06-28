@@ -405,144 +405,6 @@
     });
   }
 
-  function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 8) {
-    const source = String(text || "");
-    const lines = [];
-    let line = "";
-    for (const char of source) {
-      const testLine = line + char;
-      if (ctx.measureText(testLine).width > maxWidth && line) {
-        lines.push(line);
-        line = char;
-        if (lines.length >= maxLines) break;
-      } else {
-        line = testLine;
-      }
-    }
-    if (line && lines.length < maxLines) lines.push(line);
-    lines.forEach((item, index) => ctx.fillText(item, x, y + index * lineHeight));
-    return y + lines.length * lineHeight;
-  }
-
-  function downloadCanvas(canvas, filename) {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        toast("推广图生成失败");
-        return;
-      }
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast("推广图已生成");
-    }, "image/png");
-  }
-
-  function downloadReferralPoster(variant = "business") {
-    const tenant = currentTenant();
-    const settings = state.subscriptionSettings || {};
-    const rewardCoins = Number(settings.referralRewardCoins || 0);
-    const monthlyFee = Number(settings.monthlyFee || 0);
-    const inviteUrl = `${location.origin}/invite/${tenant.referralCode || ""}`;
-    const isReward = variant === "reward";
-    const canvas = document.createElement("canvas");
-    canvas.width = 1080;
-    canvas.height = 1440;
-    const ctx = canvas.getContext("2d");
-    const accent = isReward ? "#c2410c" : "#0f766e";
-    const soft = isReward ? "#fff7ed" : "#ecfdf5";
-    const softLine = isReward ? "#fed7aa" : "#99f6e4";
-
-    const gradient = ctx.createLinearGradient(0, 0, 1080, 1440);
-    gradient.addColorStop(0, soft);
-    gradient.addColorStop(0.55, "#ffffff");
-    gradient.addColorStop(1, "#f8fafc");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 1080, 1440);
-
-    ctx.fillStyle = accent;
-    ctx.fillRect(0, 0, 1080, 18);
-    ctx.fillStyle = "#ffffff";
-    ctx.beginPath();
-    ctx.roundRect(80, 96, 920, 1170, 36);
-    ctx.fill();
-    ctx.strokeStyle = softLine;
-    ctx.lineWidth = 4;
-    ctx.stroke();
-
-    ctx.fillStyle = accent;
-    ctx.beginPath();
-    ctx.roundRect(120, 142, 104, 104, 24);
-    ctx.fill();
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "800 58px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("¥", 172, 212);
-    ctx.textAlign = "left";
-
-    ctx.fillStyle = "#111827";
-    ctx.font = "800 58px sans-serif";
-    drawWrappedText(ctx, "智慧星 USDT 财务记账系统", 250, 188, 680, 68, 2);
-    ctx.fillStyle = "#64748b";
-    ctx.font = "700 30px sans-serif";
-    ctx.fillText(`${tenant.name} 专属推荐`, 250, 246);
-
-    ctx.fillStyle = accent;
-    ctx.font = "800 52px sans-serif";
-    const title = isReward ? `成功邀请奖励 ${money(rewardCoins)} 智慧星币` : "团队 USDT 现金流，一笔一笔查得清";
-    drawWrappedText(ctx, title, 120, 380, 840, 66, 3);
-    ctx.fillStyle = "#334155";
-    ctx.font = "700 34px sans-serif";
-    const subtitle = isReward
-      ? `1 智慧星币 = 1 USDT，可按当前月租 ${money(monthlyFee)} USDT 抵扣续费。`
-      : "链上流水批注、主管审核、往来款和平账都能完整追溯。";
-    drawWrappedText(ctx, subtitle, 120, 480, 840, 48, 3);
-
-    const featureTop = 610;
-    const features = isReward
-      ? ["客户通过你的链接申请开通", "平台审核后创建系统账号", "客户首次付费开通后发放奖励"]
-      : ["链上流水自动同步", "凭证图片和业务说明留痕", "应收应付和平账清楚记录"];
-    ctx.font = "800 34px sans-serif";
-    features.forEach((feature, index) => {
-      const y = featureTop + index * 88;
-      ctx.fillStyle = soft;
-      ctx.beginPath();
-      ctx.roundRect(120, y - 42, 840, 66, 18);
-      ctx.fill();
-      ctx.fillStyle = accent;
-      ctx.beginPath();
-      ctx.arc(154, y - 9, 14, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#0f172a";
-      ctx.fillText(feature, 188, y + 2);
-    });
-
-    ctx.fillStyle = "#f8fafc";
-    ctx.beginPath();
-    ctx.roundRect(120, 910, 840, 220, 24);
-    ctx.fill();
-    ctx.strokeStyle = "#cbd5e1";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.fillStyle = "#64748b";
-    ctx.font = "800 30px sans-serif";
-    ctx.fillText("开户链接", 154, 970);
-    ctx.fillStyle = "#0f172a";
-    ctx.font = "700 30px monospace";
-    drawWrappedText(ctx, inviteUrl, 154, 1030, 760, 44, 3);
-
-    ctx.fillStyle = "#64748b";
-    ctx.font = "700 28px sans-serif";
-    ctx.fillText("打开链接提交申请，平台开通后即可开始使用。", 120, 1210);
-
-    const safeName = String(tenant.name || "推广").replace(/[\\/:*?"<>|]/g, "-");
-    downloadCanvas(canvas, `智慧星推广图-${safeName}-${isReward ? "奖励版" : "业务版"}.png`);
-  }
-
   function startAppVersionCheck() {
     if (appVersionTimer) return;
     checkAppVersion();
@@ -2201,7 +2063,7 @@
           <p class="muted">客户通过该链接提交申请后，平台管理员开通系统；客户首次付费开通成功后发放奖励。</p>
         </div>
       </section>
-      ${renderReferralMaterials({ tenant, inviteUrl, rewardCoins, monthlyFee })}
+      ${renderReferralMaterialsEntry(inviteUrl)}
       <section class="panel">
         <div class="panel-title"><h3>邀请记录</h3><span>只显示通过你的链接提交的申请</span></div>
         ${renderReferralApplicationsForTenant(applications)}
@@ -2213,51 +2075,18 @@
     `;
   }
 
-  function renderReferralMaterials({ tenant, inviteUrl, rewardCoins, monthlyFee }) {
-    const materials = referralCopyMaterials({ tenant, inviteUrl, rewardCoins, monthlyFee });
+  function renderReferralMaterialsEntry(inviteUrl) {
+    const adUrl = `/ad?invite=${encodeURIComponent(inviteUrl)}`;
     return `<section class="panel referral-materials">
-      <div class="panel-title"><h3>推广素材库</h3><span>复制文案或下载推广图后发给客户</span></div>
-      <div class="referral-poster-grid">
-        ${["business", "reward"].map((variant) => `<article class="referral-poster-card ${variant}">
-          <div class="referral-poster-preview">
-            <span>${variant === "business" ? "现金流台账" : "推荐奖励"}</span>
-            <strong>智慧星 USDT 财务记账系统</strong>
-            <em>${variant === "business" ? "批注审核 · 链上流水 · 往来款" : `成功邀请奖励 ${money(rewardCoins)} 智慧星币`}</em>
-            <small>${escapeHtml(tenant.name)} 专属开户链接</small>
-          </div>
-          <button class="btn small primary" data-referral-poster="${variant}">下载推广图</button>
-        </article>`).join("")}
-      </div>
-      <div class="referral-copy-grid">
-        ${materials.map((material) => `<article class="referral-copy-card">
-          <div>
-            <h4>${escapeHtml(material.title)}</h4>
-            <p>${escapeHtml(material.preview)}</p>
-          </div>
-          <button class="btn small" data-copy-text="${escapeHtml(material.text)}" data-copy-label="${escapeHtml(material.title)}">复制文案</button>
-        </article>`).join("")}
+      <div class="referral-material-entry">
+        <div>
+          <span class="referral-material-kicker">推广素材库</span>
+          <h3>打开宣传图和推广文案</h3>
+          <p>素材页包含 4 套推广海报和对应文案，可复制图片、复制带专属开户链接的文案，也可以直接下载海报。</p>
+        </div>
+        <a class="btn primary" href="${escapeHtml(adUrl)}" target="_blank" rel="noopener">打开素材库</a>
       </div>
     </section>`;
-  }
-
-  function referralCopyMaterials({ tenant, inviteUrl, rewardCoins, monthlyFee }) {
-    return [
-      {
-        title: "短文案",
-        preview: "适合私聊快速发送。",
-        text: `推荐你试试智慧星 USDT 财务记账系统，适合团队管理链上 USDT 流水、批注审核、往来款和平账。开户链接：${inviteUrl}`,
-      },
-      {
-        title: "社群文案",
-        preview: "适合发群或朋友圈。",
-        text: `我们正在使用智慧星 USDT 财务记账系统，主要用来管理团队 USDT 现金流、链上流水批注、主管审核、应收应付和平账。每笔链上流水都能追溯，后期查账更清楚。\n\n开户链接：${inviteUrl}`,
-      },
-      {
-        title: "奖励说明",
-        preview: "适合介绍活动规则。",
-        text: `${tenant.name} 专属推荐链接：${inviteUrl}\n\n通过链接申请并首次付费开通后，推荐人可获得 ${money(rewardCoins)} 个智慧星币。1 智慧星币 = 1 USDT，可按当前月租 ${money(monthlyFee)} USDT 抵扣续费。`,
-      },
-    ];
   }
 
   function renderReferralApplicationsForTenant(applications) {
@@ -3249,7 +3078,6 @@
     document.querySelectorAll("[data-manual-renew]").forEach((button) => button.addEventListener("click", () => manualRenewPayment(button.dataset.manualRenew)));
     document.querySelectorAll("[data-tenant-manual-renew]").forEach((button) => button.addEventListener("click", () => manualRenewTenant(button.dataset.tenantManualRenew)));
     document.querySelectorAll("[data-referral-approve]").forEach((button) => button.addEventListener("click", () => approveReferralApplication(button.dataset.referralApprove)));
-    document.querySelectorAll("[data-referral-poster]").forEach((button) => button.addEventListener("click", () => downloadReferralPoster(button.dataset.referralPoster)));
     document.querySelector("[data-action='redeem-star-coins']")?.addEventListener("click", redeemStarCoins);
     document.querySelector("#categoryForm")?.addEventListener("submit", submitCategory);
     document.querySelectorAll("[data-reset-totp]").forEach((button) => button.addEventListener("click", () => resetTotp(button.dataset.resetTotp)));

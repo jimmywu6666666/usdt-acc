@@ -1070,15 +1070,17 @@ async function serveStatic(req, res, pathname) {
       ? "/index.html"
     : decodedPath === "/demo" || decodedPath === "/demo/"
       ? "/demo.html"
-      : decodedPath;
-  if (!["/index.html", "/demo.html"].includes(safePath) && !safePath.startsWith("/assets/")) {
+      : decodedPath === "/ad" || decodedPath === "/ad/"
+        ? "/ad.html"
+        : decodedPath;
+  if (!["/index.html", "/demo.html", "/ad.html"].includes(safePath) && !safePath.startsWith("/assets/")) {
     res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
     res.end("Not Found");
     return;
   }
   const filePath = path.resolve(rootDir, `.${safePath}`);
   const assetsDir = path.join(rootDir, "assets");
-  const validPath = ["/index.html", "/demo.html"].includes(safePath)
+  const validPath = ["/index.html", "/demo.html", "/ad.html"].includes(safePath)
     ? filePath === path.join(rootDir, safePath.slice(1))
     : filePath.startsWith(`${assetsDir}${path.sep}`);
   if (!validPath) {
