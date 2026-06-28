@@ -1163,6 +1163,35 @@ test("referral applications create a referred tenant and reward first paid openi
   assert.equal(state.starCoinLedger.length, 1);
 });
 
+test("public signup application can be approved without a referrer", () => {
+  const state = ledgerState({
+    tenants: [{ id: "tenant_alpha", name: "Alpha", enabled: true, subscriptionExpiresAt: "2026-12-31T00:00:00.000Z", referralCode: "alpha-code" }],
+    subscriptionSettings: {
+      monthlyFee: 100,
+      platformWalletAddress: "TUfGNh99WN3GH5WjnqFKottWuYKpjomNbd",
+      enabled: true,
+      autoDisable: true,
+      referralEnabled: false,
+      referralRewardCoins: 25,
+    },
+  });
+  const application = createReferralApplication(state, {
+    input: {
+      name: "Gamma",
+      supervisorName: "Gamma 主管",
+      supervisorLoginName: "gamma_sup",
+      supervisorPassword: "123456",
+    },
+  });
+  assert.equal(application.referrerTenantId, null);
+  const created = approveReferralApplication(state, {
+    user: user(state, "admin"),
+    applicationId: application.id,
+  });
+  assert.equal(created.tenant.referredByTenantId, null);
+  assert.equal(state.starCoinLedger.length, 0);
+});
+
 test("star coins redeem whole-month subscription only when balance is enough", () => {
   const state = ledgerState({
     tenants: [{ id: "tenant_alpha", name: "Alpha", enabled: true, subscriptionExpiresAt: "2026-06-20T00:00:00.000Z", referralCode: "alpha-code" }],

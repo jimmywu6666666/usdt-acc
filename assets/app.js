@@ -882,10 +882,10 @@
       <main class="login-page invite-page">
         <section class="login-panel invite-panel">
           <div class="brand"><strong>智慧星 USDT 财务记账系统</strong><span>开户链接申请</span></div>
-          <div class="notice" data-invite-status>正在读取推荐信息...</div>
+          <div class="notice" data-invite-status>${code ? "正在读取推荐信息..." : "平台开户申请，请填写开户注册信息。"}</div>
           <form id="inviteApplicationForm" class="form-grid one" hidden>
             <input type="hidden" name="referralCode" value="${escapeHtml(code)}">
-            <label>推荐人<input name="referrerName" readonly></label>
+            <label>推荐来源<input name="referrerName" readonly value="${code ? "" : "平台开户"}"></label>
             <label>系统名称<input name="name" required placeholder="例如：某某团队"></label>
             <label>主管姓名<input name="supervisorName" required placeholder="用于登录后显示"></label>
             <label>登录账号<input name="supervisorLoginName" required autocomplete="off" placeholder="3-32 位字母或数字"></label>
@@ -1962,7 +1962,7 @@
         ${renderSubscriptionTenants()}
       </section>
       <section class="panel">
-        <div class="panel-title"><h3>开户注册申请</h3><span>客户通过推荐链接提交，管理员通过后创建系统</span></div>
+        <div class="panel-title"><h3>开户注册申请</h3><span>无推荐人开户链接：${renderCopyText(`${location.origin}/invite`, "无推荐人开户链接")}</span></div>
         ${renderReferralApplicationsAdmin()}
       </section>
       <section class="panel">
@@ -2117,7 +2117,7 @@
         <td>${formatDate(application.createdAt)}</td>
         <td><strong>${escapeHtml(application.name)}</strong><br><span class="muted">${escapeHtml(application.contact || "-")}</span></td>
         <td>${escapeHtml(application.supervisorName)}<br><span class="muted">${escapeHtml(application.supervisorLoginName)}</span></td>
-        <td>${escapeHtml(tenantName(application.referrerTenantId))}</td>
+        <td>${application.referrerTenantId ? escapeHtml(tenantName(application.referrerTenantId)) : "无推荐人"}</td>
         <td>${badge(referralApplicationStatusMap(), application.status)}</td>
         <td>${escapeHtml(application.note || "-")}</td>
         <td>${pending ? `<button class="btn small primary" data-referral-approve="${application.id}">通过开通</button>` : escapeHtml(tenantName(application.tenantId))}</td>
@@ -3183,7 +3183,14 @@
     const code = inviteCodeFromPath();
     const status = document.querySelector("[data-invite-status]");
     const form = document.querySelector("#inviteApplicationForm");
-    if (!code || !status || !form) return;
+    if (!status || !form) return;
+    if (!code) {
+      form.hidden = false;
+      form.elements.referrerName.value = "平台开户";
+      status.className = "notice success";
+      status.textContent = "平台开户申请，请填写开户注册信息。";
+      return;
+    }
     try {
       const response = await fetch(`/api/referrals/${encodeURIComponent(code)}`);
       const payload = await response.json();

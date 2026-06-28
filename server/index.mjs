@@ -1066,7 +1066,7 @@ async function serveStatic(req, res, pathname) {
   const decodedPath = decodeURIComponent(pathname);
   const safePath = pathname === "/"
     ? "/index.html"
-    : decodedPath.startsWith("/invite/")
+    : decodedPath === "/invite" || decodedPath === "/invite/" || decodedPath.startsWith("/invite/")
       ? "/index.html"
     : decodedPath === "/demo" || decodedPath === "/demo/"
       ? "/demo.html"

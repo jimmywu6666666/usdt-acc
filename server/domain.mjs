@@ -860,7 +860,12 @@ export function getReferralInvite(state, { code }) {
 
 export function createReferralApplication(state, { input, now = new Date().toISOString() }) {
   reconcileState(state);
-  const invite = getReferralInvite(state, { code: input.referralCode || input.code });
+  const referralCode = normalizeReferralCode(input.referralCode || input.code);
+  const invite = referralCode ? getReferralInvite(state, { code: referralCode }) : {
+    referralCode: "",
+    referrerTenantId: null,
+    referrerName: "",
+  };
   const name = String(input.name || "").trim();
   const supervisorName = String(input.supervisorName || "").trim();
   const supervisorLoginName = String(input.supervisorLoginName || "").trim();
@@ -890,8 +895,8 @@ export function createReferralApplication(state, { input, now = new Date().toISO
   };
   state.referralApplications.unshift(application);
   appendLog(state, {
-    tenantId: invite.referrerTenantId,
-    userId: "public_referral",
+    tenantId: invite.referrerTenantId || null,
+    userId: invite.referrerTenantId ? "public_referral" : "public_signup",
     action: "提交开户链接申请",
     target: `${name}:${supervisorLoginName}`,
     createdAt: now,
