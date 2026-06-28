@@ -883,6 +883,12 @@
         <section class="login-panel invite-panel">
           <div class="brand"><strong>智慧星 USDT 财务记账系统</strong><span>开户链接申请</span></div>
           <div class="notice" data-invite-status>${code ? "正在读取推荐信息..." : "平台开户申请，请填写开户注册信息。"}</div>
+          <div class="invite-benefits">
+            <strong>适合需要管理 USDT 收付款的团队</strong>
+            <span>链上流水同步，减少漏记和错记。</span>
+            <span>员工批注、主管审核，责任更清楚。</span>
+            <span>往来款和平账统一记录，后期查账更方便。</span>
+          </div>
           <form id="inviteApplicationForm" class="form-grid one" hidden>
             <input type="hidden" name="referralCode" value="${escapeHtml(code)}">
             ${code ? `<label data-referrer-field>推荐人<input name="referrerName" readonly value=""></label>` : ""}

@@ -1250,6 +1250,12 @@ button {
   border-radius: 6px;
 }
 
+.notice.success {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
 .chain-status-ok {
   margin-bottom: 14px;
   border-color: #b9decf;
@@ -1904,6 +1910,29 @@ tr:last-child td {
 
 .login-panel .btn {
   width: 100%;
+}
+
+.invite-benefits {
+  display: grid;
+  gap: 7px;
+  margin: -6px 0 16px;
+  padding: 12px;
+  border: 1px solid #b9decf;
+  border-radius: 8px;
+  background: #f0faf6;
+  color: #17603f;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.invite-benefits strong {
+  color: #134e4a;
+  font-size: 14px;
+}
+
+.invite-benefits span {
+  color: #3f6f5b;
+  font-weight: 700;
 }
 
 .login-hint {
