@@ -3160,7 +3160,10 @@ tr:last-child td {
 }
 
 .account-delivery-all {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   margin-top: 2px;
 }
 

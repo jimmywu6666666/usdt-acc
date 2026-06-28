@@ -3325,7 +3325,10 @@
         ${accountDeliveryField("登录账号", setup.loginName || "-")}
         ${accountDeliveryField("初始密码", initialPassword || "-")}
         ${accountDeliveryField("登录密钥", setup.secret, true)}
-        <div class="wide account-delivery-all"><button class="btn primary" type="button" data-copy-text="${escapeHtml(deliveryText)}" data-copy-label="开户信息">复制全部</button></div>
+        <div class="wide account-delivery-all">
+          <button class="btn primary" type="button" data-copy-text="${escapeHtml(deliveryText)}" data-copy-label="开户信息">复制全部</button>
+          <a class="btn" href="${escapeHtml(loginUrl)}" target="_blank" rel="noopener">立即登录</a>
+        </div>
       </section>
       <p class="login-hint">请把登录密钥保存到验证器；以后登录需要账号、密码和 6 位动态验证码。</p>
     </section>`;
