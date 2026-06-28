@@ -2057,6 +2057,40 @@ tr:last-child td {
   color: #6d28d9;
 }
 
+.invite-panel {
+  max-width: 760px;
+}
+
+.copy-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.copy-box strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  color: var(--text);
+}
+
+.metric-main {
+  margin: 8px 0;
+  font-size: 42px;
+  line-height: 1.05;
+  font-weight: 800;
+  color: var(--green);
+}
+
+.referral-summary-card .btn {
+  margin-top: 12px;
+}
+
 @media (max-width: 1040px) {
   .layout {
     grid-template-columns: 1fr;
@@ -3173,6 +3207,14 @@ tr:last-child td {
 
   .demo-create-form {
     grid-template-columns: 1fr;
+  }
+
+  .copy-box {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-main {
+    font-size: 34px;
   }
 
   .ticket-detail-meta {

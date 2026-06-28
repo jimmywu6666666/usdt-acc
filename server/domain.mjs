@@ -15,6 +15,8 @@ export function validateState(state) {
   if (state.receivablePayables && !Array.isArray(state.receivablePayables)) return "receivablePayables 必须是数组";
   if (state.receivableSettlements && !Array.isArray(state.receivableSettlements)) return "receivableSettlements 必须是数组";
   if (state.supportTickets && !Array.isArray(state.supportTickets)) return "supportTickets 必须是数组";
+  if (state.referralApplications && !Array.isArray(state.referralApplications)) return "referralApplications 必须是数组";
+  if (state.starCoinLedger && !Array.isArray(state.starCoinLedger)) return "starCoinLedger 必须是数组";
   return null;
 }
 
@@ -37,6 +39,8 @@ export function migrateAnnotationState(state) {
   state.receivableSettlements ||= [];
   state.supportTickets ||= [];
   state.demoClaims ||= [];
+  state.referralApplications ||= [];
+  state.starCoinLedger ||= [];
   state.entries ||= [];
   state.legacyEntries ||= [];
   state.subscriptionSettings ||= {};
@@ -45,6 +49,8 @@ export function migrateAnnotationState(state) {
   state.subscriptionSettings.platformWalletAddress ||= "";
   state.subscriptionSettings.enabled = state.subscriptionSettings.enabled === true;
   state.subscriptionSettings.autoDisable = state.subscriptionSettings.autoDisable !== false;
+  state.subscriptionSettings.referralEnabled = state.subscriptionSettings.referralEnabled === true;
+  state.subscriptionSettings.referralRewardCoins = nonNegativeNumberOrDefault(state.subscriptionSettings.referralRewardCoins, 0);
   state.systemSettings ||= {};
   state.systemSettings.walletEnabledLimit = nonNegativeIntegerOrDefault(state.systemSettings.walletEnabledLimit, 0);
 
@@ -97,6 +103,7 @@ export function migrateAnnotationState(state) {
   }
   for (const tenant of state.tenants || []) {
     tenant.subscriptionStatus ||= tenant.subscriptionExpiresAt ? (new Date(tenant.subscriptionExpiresAt).getTime() >= Date.now() ? "active" : "expired") : "unset";
+    if (!tenant.demo) tenant.referralCode ||= uniqueReferralCode(state);
   }
   for (const settlement of state.receivableSettlements || []) {
     settlement.attachmentName ||= "";
@@ -807,7 +814,18 @@ export function createTenant(state, { user, input, now = new Date().toISOString(
   const supervisorPassword = String(input.supervisorPassword || "");
   if (!name || !supervisorName) throw badRequest("系统名称和主管姓名不能为空");
   validateNewLogin(state, supervisorLoginName, supervisorPassword);
-  const tenant = { id: id("tenant"), name, enabled: true, createdAt: now };
+  const referrerTenantId = String(input.referredByTenantId || "").trim();
+  const referrer = referrerTenantId ? state.tenants.find((item) => item.id === referrerTenantId && !item.demo) : null;
+  if (referrerTenantId && !referrer) throw badRequest("推荐人系统不存在");
+  const tenant = {
+    id: id("tenant"),
+    name,
+    enabled: true,
+    createdAt: now,
+    referralCode: uniqueReferralCode(state),
+    referredByTenantId: referrer?.id || null,
+    referralRewardGrantedAt: null,
+  };
   const supervisor = {
     id: id("user"),
     tenantId: tenant.id,
@@ -823,6 +841,149 @@ export function createTenant(state, { user, input, now = new Date().toISOString(
   state.activeTenantId = tenant.id;
   appendLog(state, { tenantId: tenant.id, userId: user.id, action: "开通独立系统", target: name, createdAt: now });
   return { tenant, supervisor };
+}
+
+export function getReferralInvite(state, { code }) {
+  reconcileState(state);
+  const settings = state.subscriptionSettings || {};
+  if (!settings.referralEnabled) throw badRequest("推广有礼暂未开启");
+  const normalizedCode = normalizeReferralCode(code);
+  const referrer = state.tenants.find((item) => item.referralCode === normalizedCode && !item.demo);
+  if (!referrer) throw notFound("推荐链接不存在或已失效");
+  return {
+    referralCode: referrer.referralCode,
+    referrerTenantId: referrer.id,
+    referrerName: referrer.name,
+    rewardCoins: Number(settings.referralRewardCoins || 0),
+  };
+}
+
+export function createReferralApplication(state, { input, now = new Date().toISOString() }) {
+  reconcileState(state);
+  const invite = getReferralInvite(state, { code: input.referralCode || input.code });
+  const name = String(input.name || "").trim();
+  const supervisorName = String(input.supervisorName || "").trim();
+  const supervisorLoginName = String(input.supervisorLoginName || "").trim();
+  const supervisorPassword = String(input.supervisorPassword || "");
+  const contact = String(input.contact || "").trim();
+  const note = String(input.note || "").trim();
+  if (!name || !supervisorName) throw badRequest("系统名称和主管姓名不能为空");
+  validateNewLogin(state, supervisorLoginName, supervisorPassword);
+  if (state.referralApplications.some((item) => item.status === "pending" && sameLoginName(item.supervisorLoginName, supervisorLoginName))) {
+    throw badRequest("该登录账号已提交申请，请等待平台处理");
+  }
+  const application = {
+    id: id("refapp"),
+    referralCode: invite.referralCode,
+    referrerTenantId: invite.referrerTenantId,
+    name,
+    supervisorName,
+    supervisorLoginName,
+    supervisorPassword,
+    contact,
+    note,
+    status: "pending",
+    createdAt: now,
+    approvedAt: null,
+    approvedBy: null,
+    tenantId: null,
+  };
+  state.referralApplications.unshift(application);
+  appendLog(state, {
+    tenantId: invite.referrerTenantId,
+    userId: "public_referral",
+    action: "提交开户链接申请",
+    target: `${name}:${supervisorLoginName}`,
+    createdAt: now,
+  });
+  return applicationForClient(application);
+}
+
+export function approveReferralApplication(state, { user, applicationId, now = new Date().toISOString() }) {
+  reconcileState(state);
+  assertAdmin(user);
+  const application = state.referralApplications.find((item) => item.id === applicationId);
+  if (!application) throw notFound("开户注册申请不存在");
+  if (application.status !== "pending") throw badRequest("该申请已处理");
+  const initialPassword = application.supervisorPassword;
+  const created = createTenant(state, {
+    user,
+    input: {
+      name: application.name,
+      supervisorName: application.supervisorName,
+      supervisorLoginName: application.supervisorLoginName,
+      supervisorPassword: application.supervisorPassword,
+      referredByTenantId: application.referrerTenantId,
+    },
+    now,
+  });
+  application.status = "approved";
+  application.approvedAt = now;
+  application.approvedBy = user.id;
+  application.tenantId = created.tenant.id;
+  delete application.supervisorPassword;
+  appendLog(state, {
+    tenantId: created.tenant.id,
+    userId: user.id,
+    action: "通过开户注册申请",
+    target: `${application.name}:${application.referrerTenantId}`,
+    createdAt: now,
+  });
+  return { ...created, application: applicationForClient(application), initialPassword };
+}
+
+export function redeemStarCoinsForSubscription(state, { user, months, now = new Date().toISOString() }) {
+  reconcileState(state);
+  const tenant = state.tenants.find((item) => item.id === user?.tenantId);
+  if (!tenant || user.role !== "supervisor") throw forbidden("只有主管可以使用智慧星币续费");
+  if (tenant.demo) throw badRequest("演示环境不支持智慧星币续费");
+  const settings = state.subscriptionSettings || {};
+  if (!settings.referralEnabled) throw badRequest("推广有礼暂未开启");
+  const numericMonths = Number(months);
+  if (!Number.isInteger(numericMonths) || numericMonths <= 0) throw badRequest("续费月数必须是正整数");
+  const monthlyFee = Number(settings.monthlyFee);
+  if (!Number.isFinite(monthlyFee) || monthlyFee <= 0) throw badRequest("月租费用未正确配置");
+  const requiredCoins = Number((monthlyFee * numericMonths).toFixed(6));
+  const balance = starCoinBalance(state, tenant.id);
+  if (balance + 0.000001 < requiredCoins) throw badRequest(`智慧星币余额不足，本次需要 ${requiredCoins} 个`);
+  const payment = {
+    id: id("pay"),
+    hash: `starcoin-${cryptoRandom()}-${cryptoRandom()}`,
+    eventIndex: null,
+    fromAddress: "",
+    toAddress: "",
+    amount: requiredCoins,
+    memo: "智慧星币抵扣续费",
+    tenantId: tenant.id,
+    status: "starcoin_applied",
+    months: numericMonths,
+    days: 0,
+    reason: `智慧星币抵扣续费 ${numericMonths} 个月`,
+    chainTime: now,
+    createdAt: now,
+    processedAt: now,
+    processedBy: user.id,
+    source: "star_coin",
+  };
+  state.platformPayments.unshift(payment);
+  appendStarCoinLedger(state, {
+    tenantId: tenant.id,
+    type: "redeem",
+    amount: -requiredCoins,
+    relatedPaymentId: payment.id,
+    note: `抵扣租用续费 ${numericMonths} 个月`,
+    createdBy: user.id,
+    createdAt: now,
+  });
+  renewTenantSubscription(state, {
+    tenant,
+    months: numericMonths,
+    payment,
+    actor: user,
+    now,
+    manual: true,
+  });
+  return payment;
 }
 
 export function createDemoAccount(state, { user, input, now = new Date().toISOString() }) {
@@ -1047,10 +1208,12 @@ export function updateSubscriptionSettings(state, { user, input, now = new Date(
   assertAdmin(user);
   const monthlyFee = Number(input.monthlyFee);
   const firstOpenFee = Number(input.firstOpenFee || 0);
+  const referralRewardCoins = Number(input.referralRewardCoins || 0);
   const platformWalletAddress = String(input.platformWalletAddress || "").trim();
   if (!Number.isFinite(monthlyFee) || monthlyFee <= 0) throw badRequest("月租费用必须大于 0");
   if (!Number.isFinite(firstOpenFee) || firstOpenFee < 0) throw badRequest("首次开通优惠价不能小于 0");
   if (firstOpenFee > 0 && firstOpenFee >= monthlyFee) throw badRequest("首次开通优惠价必须低于月租费用");
+  if (!Number.isFinite(referralRewardCoins) || referralRewardCoins < 0) throw badRequest("邀请奖励智慧星币不能小于 0");
   if (platformWalletAddress && !isValidTronAddress(platformWalletAddress)) throw badRequest("平台收款钱包地址格式或校验码不正确");
   state.subscriptionSettings = {
     monthlyFee,
@@ -1058,6 +1221,8 @@ export function updateSubscriptionSettings(state, { user, input, now = new Date(
     platformWalletAddress,
     enabled: input.enabled === true,
     autoDisable: input.autoDisable !== false,
+    referralEnabled: input.referralEnabled === true,
+    referralRewardCoins,
     updatedAt: now,
   };
   appendLog(state, {
@@ -1888,6 +2053,7 @@ function subscriptionMonths(amount, settingsOrMonthlyFee, tenant = null) {
 }
 
 function renewTenantSubscription(state, { tenant, months = 0, days = 0, payment, actor, now, manual = false }) {
+  const wasUnopened = !tenant.subscriptionExpiresAt;
   const currentExpiry = tenant.subscriptionExpiresAt ? new Date(tenant.subscriptionExpiresAt) : null;
   const base = currentExpiry && currentExpiry.getTime() > new Date(now).getTime() ? currentExpiry : new Date(now);
   tenant.subscriptionExpiresAt = addDays(addMonths(base, months), days).toISOString();
@@ -1915,6 +2081,38 @@ function renewTenantSubscription(state, { tenant, months = 0, days = 0, payment,
       createdAt: now,
     });
   }
+  maybeGrantReferralReward(state, { tenant, payment, actor, wasUnopened, now });
+}
+
+function maybeGrantReferralReward(state, { tenant, payment, actor, wasUnopened, now }) {
+  const settings = state.subscriptionSettings || {};
+  if (!settings.referralEnabled) return;
+  if (!wasUnopened) return;
+  if (!tenant.referredByTenantId || tenant.referralRewardGrantedAt || tenant.demo) return;
+  if (payment.source === "manual" && !(Number(payment.amount) > 0)) return;
+  const referrer = state.tenants.find((item) => item.id === tenant.referredByTenantId && !item.demo);
+  if (!referrer) return;
+  const amount = Number(settings.referralRewardCoins || 0);
+  if (!Number.isFinite(amount) || amount <= 0) return;
+  appendStarCoinLedger(state, {
+    tenantId: referrer.id,
+    type: "earn",
+    amount,
+    relatedTenantId: tenant.id,
+    relatedPaymentId: payment.id,
+    note: `成功邀请「${tenant.name}」首次开通`,
+    createdBy: actor.id,
+    createdAt: now,
+  });
+  tenant.referralRewardGrantedAt = now;
+  tenant.referralRewardTenantId = referrer.id;
+  appendLog(state, {
+    tenantId: referrer.id,
+    userId: actor.id,
+    action: "发放邀请智慧星币",
+    target: `${tenant.name}:${amount}`,
+    createdAt: now,
+  });
 }
 
 function addMonths(date, months) {
@@ -1931,6 +2129,58 @@ function addDays(date, days) {
   const next = new Date(date);
   next.setUTCDate(next.getUTCDate() + Number(days || 0));
   return next;
+}
+
+function normalizeReferralCode(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function uniqueReferralCode(state) {
+  let candidate = "";
+  do {
+    candidate = `jx${cryptoRandom()}${cryptoRandom()}`.replace(/[^a-z0-9]/gi, "").slice(0, 14).toLowerCase();
+  } while (!candidate || state.tenants?.some((tenant) => tenant.referralCode === candidate));
+  return candidate;
+}
+
+function appendStarCoinLedger(state, {
+  tenantId,
+  type,
+  amount,
+  relatedTenantId = null,
+  relatedPaymentId = null,
+  note = "",
+  createdBy,
+  createdAt,
+}) {
+  state.starCoinLedger ||= [];
+  const numericAmount = Number(amount);
+  if (!Number.isFinite(numericAmount) || numericAmount === 0) throw badRequest("智慧星币金额无效");
+  const entry = {
+    id: id("coin"),
+    tenantId,
+    type,
+    amount: numericAmount,
+    relatedTenantId,
+    relatedPaymentId,
+    note,
+    createdBy,
+    createdAt,
+  };
+  state.starCoinLedger.unshift(entry);
+  return entry;
+}
+
+function starCoinBalance(state, tenantId) {
+  return Number((state.starCoinLedger || [])
+    .filter((entry) => entry.tenantId === tenantId)
+    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0)
+    .toFixed(6));
+}
+
+function applicationForClient(application) {
+  const { supervisorPassword, ...safeApplication } = application;
+  return safeApplication;
 }
 
 function categoryFallback(direction) {

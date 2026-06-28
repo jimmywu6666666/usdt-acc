@@ -2,11 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   autoCloseStaleSupportTickets,
+  approveReferralApplication,
   claimDemoAccount,
   createAnnotation,
   createReceivablePayable,
   createReceivableSettlement,
   createDemoAccount,
+  createReferralApplication,
   createSupportTicket,
   createCategory,
   createEmployee,
@@ -19,6 +21,7 @@ import {
   exportReceivablePayablesCsv,
   getAnnotationAttachment,
   getAuditLogsForUser,
+  getReferralInvite,
   getReceivableAttachment,
   getSupportTicketAttachment,
   getTransactionDetail,
@@ -35,6 +38,7 @@ import {
   resetUserTotp,
   resetDemoTenantData,
   resetStaleDemoTenants,
+  redeemStarCoinsForSubscription,
   reviewAnnotation,
   reviewReceivablePayable,
   reviewReceivableSettlement,
@@ -1095,6 +1099,122 @@ test("admin can renew a tenant manually without a chain payment", () => {
     months: 1,
     reason: "主管尝试续费",
   }), /管理员权限/);
+});
+
+test("referral applications create a referred tenant and reward first paid opening once", () => {
+  const state = ledgerState({
+    tenants: [{ id: "tenant_alpha", name: "Alpha", enabled: true, subscriptionExpiresAt: "2026-12-31T00:00:00.000Z", referralCode: "alpha-code" }],
+    subscriptionSettings: {
+      monthlyFee: 100,
+      firstOpenFee: 49,
+      platformWalletAddress: "TUfGNh99WN3GH5WjnqFKottWuYKpjomNbd",
+      enabled: true,
+      autoDisable: true,
+      referralEnabled: true,
+      referralRewardCoins: 25,
+    },
+  });
+  const invite = getReferralInvite(state, { code: "alpha-code" });
+  assert.equal(invite.referrerName, "Alpha");
+  const application = createReferralApplication(state, {
+    input: {
+      referralCode: "alpha-code",
+      name: "Beta",
+      supervisorName: "Beta 主管",
+      supervisorLoginName: "beta_sup",
+      supervisorPassword: "123456",
+      contact: "telegram",
+    },
+    now: "2026-06-08T00:00:00.000Z",
+  });
+  assert.equal(application.status, "pending");
+  const created = approveReferralApplication(state, {
+    user: user(state, "admin"),
+    applicationId: application.id,
+    now: "2026-06-08T00:10:00.000Z",
+  });
+  assert.equal(created.tenant.referredByTenantId, "tenant_alpha");
+  assert.equal(created.initialPassword, "123456");
+  assert.equal("supervisorPassword" in state.referralApplications[0], false);
+  assert.equal(state.referralApplications[0].status, "approved");
+  const betaSupervisor = state.users.find((item) => item.tenantId === created.tenant.id && item.role === "supervisor");
+  const hash = "d".repeat(64);
+  submitSubscriptionHash(state, {
+    user: betaSupervisor,
+    hash,
+    now: "2026-06-08T01:00:00.000Z",
+    transaction: {
+      hash, direction: "income", amount: 49, counterparty: "TPayer",
+      confirmed: true, chainTime: "2026-06-08T01:00:00.000Z",
+    },
+  });
+  assert.equal(state.starCoinLedger.length, 1);
+  assert.equal(state.starCoinLedger[0].tenantId, "tenant_alpha");
+  assert.equal(state.starCoinLedger[0].amount, 25);
+  submitSubscriptionHash(state, {
+    user: betaSupervisor,
+    hash: "e".repeat(64),
+    now: "2026-07-08T01:00:00.000Z",
+    transaction: {
+      hash: "e".repeat(64), direction: "income", amount: 100, counterparty: "TPayer",
+      confirmed: true, chainTime: "2026-07-08T01:00:00.000Z",
+    },
+  });
+  assert.equal(state.starCoinLedger.length, 1);
+});
+
+test("star coins redeem whole-month subscription only when balance is enough", () => {
+  const state = ledgerState({
+    tenants: [{ id: "tenant_alpha", name: "Alpha", enabled: true, subscriptionExpiresAt: "2026-06-20T00:00:00.000Z", referralCode: "alpha-code" }],
+    subscriptionSettings: {
+      monthlyFee: 80,
+      firstOpenFee: 0,
+      platformWalletAddress: "TUfGNh99WN3GH5WjnqFKottWuYKpjomNbd",
+      enabled: true,
+      autoDisable: true,
+      referralEnabled: true,
+      referralRewardCoins: 20,
+    },
+    starCoinLedger: [{ id: "coin_a", tenantId: "tenant_alpha", type: "earn", amount: 160, note: "奖励", createdBy: "admin", createdAt: "2026-06-08T00:00:00.000Z" }],
+  });
+  const payment = redeemStarCoinsForSubscription(state, {
+    user: user(state, "sup"),
+    months: 2,
+    now: "2026-06-08T00:00:00.000Z",
+  });
+  assert.equal(payment.status, "starcoin_applied");
+  assert.equal(payment.amount, 160);
+  assert.equal(state.tenants[0].subscriptionExpiresAt, "2026-08-20T00:00:00.000Z");
+  assert.equal(state.starCoinLedger.reduce((sum, entry) => sum + entry.amount, 0), 0);
+  assert.throws(() => redeemStarCoinsForSubscription(state, {
+    user: user(state, "sup"),
+    months: 1,
+  }), /余额不足/);
+});
+
+test("referral feature rejects disabled settings and demo tenants", () => {
+  const state = ledgerState({
+    tenants: [{ id: "tenant_alpha", name: "演示", enabled: true, demo: true, subscriptionStatus: "demo", referralCode: "demo-code" }],
+    users: [
+      { id: "admin", tenantId: null, name: "管理员", role: "admin", canViewAll: true },
+      { id: "sup", tenantId: "tenant_alpha", name: "演示主管", role: "supervisor", canViewAll: true, demo: true },
+    ],
+    subscriptionSettings: {
+      monthlyFee: 100,
+      platformWalletAddress: "TUfGNh99WN3GH5WjnqFKottWuYKpjomNbd",
+      enabled: true,
+      autoDisable: true,
+      referralEnabled: false,
+      referralRewardCoins: 25,
+    },
+  });
+  assert.throws(() => getReferralInvite(state, { code: "demo-code" }), /暂未开启/);
+  state.subscriptionSettings.referralEnabled = true;
+  assert.throws(() => getReferralInvite(state, { code: "demo-code" }), /不存在或已失效/);
+  assert.throws(() => redeemStarCoinsForSubscription(state, {
+    user: user(state, "sup"),
+    months: 1,
+  }), /演示环境不支持/);
 });
 
 test("admin renames global categories without touching historical annotations", () => {

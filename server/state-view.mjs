@@ -10,8 +10,11 @@ export function stateForUser(state, user) {
   safeState.receivablePayables ||= [];
   safeState.receivableSettlements ||= [];
   safeState.supportTickets ||= [];
+  safeState.referralApplications ||= [];
+  safeState.starCoinLedger ||= [];
   safeState.receivablePayables = safeState.receivablePayables.map(receivableForClient);
   safeState.supportTickets = safeState.supportTickets.map(supportTicketForClient);
+  safeState.referralApplications = safeState.referralApplications.map(referralApplicationForClient);
 
   if (user.role === "admin") {
     const demoTenantIds = new Set(safeState.tenants.filter((item) => item.demo).map((item) => item.id));
@@ -39,6 +42,8 @@ export function stateForUser(state, user) {
     firstOpenFee: Number(safeState.subscriptionSettings?.firstOpenFee || 0),
     platformWalletAddress: currentTenant?.demo ? "" : safeState.subscriptionSettings?.platformWalletAddress || "",
     autoDisable: safeState.subscriptionSettings?.autoDisable !== false,
+    referralEnabled: safeState.subscriptionSettings?.referralEnabled === true,
+    referralRewardCoins: Number(safeState.subscriptionSettings?.referralRewardCoins || 0),
   };
   safeState.systemSettings = {
     walletEnabledLimit: Number(safeState.systemSettings?.walletEnabledLimit || 0),
@@ -49,6 +54,10 @@ export function stateForUser(state, user) {
   safeState.walletBalanceSnapshots = (safeState.walletBalanceSnapshots || []).filter((item) => item.tenantId === tenantId);
   safeState.receivablePayables = (safeState.receivablePayables || []).filter((item) => item.tenantId === tenantId);
   safeState.receivableSettlements = (safeState.receivableSettlements || []).filter((item) => item.tenantId === tenantId);
+  safeState.referralApplications = (safeState.referralApplications || []).filter((item) => (
+    item.referrerTenantId === tenantId || item.tenantId === tenantId
+  ));
+  safeState.starCoinLedger = (safeState.starCoinLedger || []).filter((item) => item.tenantId === tenantId);
   safeState.supportTickets = user.role === "supervisor"
     ? (safeState.supportTickets || []).filter((item) => item.tenantId === tenantId)
     : [];
@@ -119,6 +128,11 @@ function platformPaymentForClient(payment) {
     processedAt,
     source,
   };
+}
+
+function referralApplicationForClient(application) {
+  const { supervisorPassword, ...safeApplication } = application;
+  return safeApplication;
 }
 
 function receivableForClient(item) {

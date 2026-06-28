@@ -190,6 +190,8 @@
     entries: [],
     legacyEntries: [],
     platformPayments: [],
+    referralApplications: [],
+    starCoinLedger: [],
     receivablePayables: [],
     receivableSettlements: [],
     supportTickets: [],
@@ -199,6 +201,8 @@
       platformWalletAddress: "",
       enabled: false,
       autoDisable: true,
+      referralEnabled: false,
+      referralRewardCoins: 0,
     },
     systemSettings: {
       walletEnabledLimit: 0,
@@ -759,9 +763,24 @@
       applied: ["已自动续费", "green"],
       manual_applied: ["已手工续费", "blue"],
       offline_applied: ["线下手工续费", "blue"],
+      starcoin_applied: ["智慧星币续费", "blue"],
       unidentified: ["待人工处理", "orange"],
       amount_insufficient: ["金额不足", "red"],
       amount_abnormal: ["金额异常", "red"],
+    };
+  }
+
+  function referralApplicationStatusMap() {
+    return {
+      pending: ["待开通", "orange"],
+      approved: ["已开通", "green"],
+    };
+  }
+
+  function starCoinTypeMap() {
+    return {
+      earn: ["邀请奖励", "green"],
+      redeem: ["续费抵扣", "blue"],
     };
   }
 
@@ -791,6 +810,12 @@
 
   function render() {
     const app = document.querySelector("#app");
+    if (isInvitePage() && !session?.token) {
+      stopAutoRefresh();
+      app.innerHTML = renderInvitePage();
+      bindInviteEvents();
+      return;
+    }
     if (!session?.token) {
       stopAutoRefresh();
       app.innerHTML = renderLogin();
@@ -829,6 +854,10 @@
     scrollToPendingTarget();
   }
 
+  function isInvitePage() {
+    return location.pathname.startsWith("/invite/");
+  }
+
   function renderLogin() {
     const isProduction = runtimeConfig.productionMode === true;
     return `
@@ -847,6 +876,34 @@
     `;
   }
 
+  function renderInvitePage() {
+    const code = inviteCodeFromPath();
+    return `
+      <main class="login-page invite-page">
+        <section class="login-panel invite-panel">
+          <div class="brand"><strong>智慧星 USDT 财务记账系统</strong><span>开户链接申请</span></div>
+          <div class="notice" data-invite-status>正在读取推荐信息...</div>
+          <form id="inviteApplicationForm" class="form-grid one" hidden>
+            <input type="hidden" name="referralCode" value="${escapeHtml(code)}">
+            <label>推荐人<input name="referrerName" readonly></label>
+            <label>系统名称<input name="name" required placeholder="例如：某某团队"></label>
+            <label>主管姓名<input name="supervisorName" required placeholder="用于登录后显示"></label>
+            <label>登录账号<input name="supervisorLoginName" required autocomplete="off" placeholder="3-32 位字母或数字"></label>
+            <label>初始密码<input name="supervisorPassword" type="password" required minlength="6" placeholder="至少 6 位"></label>
+            <label><span class="field-label">联系方式 <em class="optional-mark">选填</em></span><input name="contact" placeholder="手机号、Telegram、微信等"></label>
+            <label><span class="field-label">备注 <em class="optional-mark">选填</em></span><textarea name="note" rows="3" placeholder="补充说明"></textarea></label>
+            <button class="btn primary" type="submit">提交开通申请</button>
+          </form>
+          <p class="login-hint">提交后由平台管理员开通系统，开通后会交付登录账号信息。</p>
+        </section>
+      </main>
+    `;
+  }
+
+  function inviteCodeFromPath() {
+    return decodeURIComponent(location.pathname.split("/").filter(Boolean)[1] || "").trim();
+  }
+
   function renderSidebar() {
     const role = currentUser().role;
     const nav = [
@@ -860,6 +917,7 @@
     if (["admin", "supervisor"].includes(role)) nav.splice(2, 0, ["review", "审核中心"]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["users", "账号管理"]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["subscription", role === "admin" ? "租用管理" : "租用续费"]);
+    if (role === "supervisor" && !currentTenant()?.demo && state.subscriptionSettings?.referralEnabled) nav.splice(-1, 0, ["referral", "推广有礼"]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["tickets", "工单中心"]);
     if (role === "admin") nav.splice(-1, 0, ["admin", "系统管理"]);
     if (role === "admin") nav.splice(-1, 0, ["server", "服务器管理"]);
@@ -875,6 +933,7 @@
     if (state.activeView === "admin" && role !== "admin") state.activeView = "dashboard";
     if (state.activeView === "server" && role !== "admin") state.activeView = "dashboard";
     if (state.activeView === "subscription" && !["admin", "supervisor"].includes(role)) state.activeView = "dashboard";
+    if (state.activeView === "referral" && (role !== "supervisor" || currentTenant()?.demo || !state.subscriptionSettings?.referralEnabled)) state.activeView = "dashboard";
     if (state.activeView === "tickets" && !["admin", "supervisor"].includes(role)) state.activeView = "dashboard";
     const views = {
       dashboard: renderDashboard,
@@ -887,6 +946,7 @@
       users: renderUsers,
       admin: renderAdmin,
       subscription: renderSubscription,
+      referral: renderReferral,
       tickets: renderTickets,
       server: renderServer,
       profile: renderProfile,
@@ -1883,6 +1943,8 @@
             <label class="checkline"><input name="enabled" type="checkbox" ${settings.enabled ? "checked" : ""}> 启用交易哈希自动续费</label>
             <p class="form-hint">勾选后，主管付款后可提交交易哈希，系统校验到账并自动续租；未开通租户可按首次优惠价开通，优惠价为 0 时按正常月租计算。</p>
             <label class="checkline"><input name="autoDisable" type="checkbox" ${settings.autoDisable !== false ? "checked" : ""}> 到期后自动停用系统</label>
+            <label class="checkline"><input name="referralEnabled" type="checkbox" ${settings.referralEnabled ? "checked" : ""}> 启用推广有礼</label>
+            <label><span class="field-label">邀请成功奖励（智慧星币） <em class="optional-mark">首次付费开通后发放</em></span><input name="referralRewardCoins" type="number" min="0" step="0.000001" value="${escapeHtml(settings.referralRewardCoins || 0)}" required></label>
             <div class="actions"><button class="btn primary" type="submit">保存设置</button></div>
           </form>
         </div>
@@ -1898,6 +1960,14 @@
       <section class="panel">
         <div class="panel-title"><h3>租户租用状态</h3><span>可对体外收费或异常付款直接手工续费</span></div>
         ${renderSubscriptionTenants()}
+      </section>
+      <section class="panel">
+        <div class="panel-title"><h3>开户注册申请</h3><span>客户通过推荐链接提交，管理员通过后创建系统</span></div>
+        ${renderReferralApplicationsAdmin()}
+      </section>
+      <section class="panel">
+        <div class="panel-title"><h3>智慧星币记录</h3><span>邀请奖励和抵扣续费都会留痕</span></div>
+        ${renderStarCoinLedgerAdmin()}
       </section>
       <section class="panel">
         <div class="panel-title"><h3>平台收入列表</h3><span>查看租户提交哈希后的付款处理结果</span></div>
@@ -1958,6 +2028,114 @@
     return `<div class="table-wrap"><table class="subscription-history-table">
       <thead><tr><th>提交/链上时间</th><th>金额</th><th>处理状态</th><th>交易哈希</th><th>续费时长</th><th>说明</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="6" class="empty slim">暂无续费提交记录</td></tr>`}</tbody>
+    </table></div>`;
+  }
+
+  function renderReferral() {
+    const tenant = currentTenant();
+    const settings = state.subscriptionSettings || {};
+    if (!settings.referralEnabled || tenant.demo) return `<div class="panel empty">推广有礼暂未开启</div>`;
+    const balance = starCoinBalance(tenant.id);
+    const monthlyFee = Number(settings.monthlyFee || 0);
+    const inviteUrl = `${location.origin}/invite/${tenant.referralCode || ""}`;
+    const applications = (state.referralApplications || []).filter((item) => item.referrerTenantId === tenant.id);
+    const ledger = (state.starCoinLedger || []).filter((item) => item.tenantId === tenant.id);
+    return `
+      ${pageHead("推广有礼", "邀请新客户开通系统，首次付费开通后获得智慧星币")}
+      <section class="grid two-col">
+        <div class="panel referral-summary-card">
+          <div class="panel-title"><h3>智慧星币余额</h3><span>1 智慧星币 = 1 USDT</span></div>
+          <div class="metric-main">${money(balance)}</div>
+          <p class="muted">当前月租 ${money(monthlyFee)} USDT，可按整月抵扣续费。</p>
+          <button class="btn primary" data-action="redeem-star-coins" ${balance + 0.000001 < monthlyFee ? "disabled" : ""}>使用智慧星币续费</button>
+        </div>
+        <div class="panel">
+          <div class="panel-title"><h3>专属推荐链接</h3><span>发送给客户填写开通申请</span></div>
+          <div class="copy-box">
+            <strong>${escapeHtml(inviteUrl)}</strong>
+            <button class="btn small" data-copy-text="${escapeHtml(inviteUrl)}">复制链接</button>
+          </div>
+          <p class="muted">客户通过该链接提交申请后，平台管理员开通系统；客户首次付费开通成功后发放奖励。</p>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-title"><h3>邀请记录</h3><span>只显示通过你的链接提交的申请</span></div>
+        ${renderReferralApplicationsForTenant(applications)}
+      </section>
+      <section class="panel">
+        <div class="panel-title"><h3>智慧星币明细</h3><span>奖励和抵扣都会记录</span></div>
+        ${renderStarCoinLedgerForTenant(ledger)}
+      </section>
+    `;
+  }
+
+  function renderReferralApplicationsForTenant(applications) {
+    const rows = applications.slice().sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt)).map((application) => `<tr>
+      <td>${formatDate(application.createdAt)}</td>
+      <td><strong>${escapeHtml(application.name)}</strong></td>
+      <td>${escapeHtml(application.supervisorName)}</td>
+      <td>${badge(referralApplicationStatusMap(), application.status)}</td>
+      <td>${application.tenantId ? escapeHtml(tenantName(application.tenantId)) : "-"}</td>
+    </tr>`).join("");
+    return `<div class="table-wrap"><table>
+      <thead><tr><th>申请时间</th><th>申请系统</th><th>联系人</th><th>状态</th><th>开通系统</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="5" class="empty slim">暂无邀请申请</td></tr>`}</tbody>
+    </table></div>`;
+  }
+
+  function renderStarCoinLedgerForTenant(ledger) {
+    const rows = ledger.slice().sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt)).map((entry) => `<tr>
+      <td>${formatDate(entry.createdAt)}</td>
+      <td>${badge(starCoinTypeMap(), entry.type)}</td>
+      <td class="${Number(entry.amount) >= 0 ? "amount-income" : "amount-expense"}">${Number(entry.amount) >= 0 ? "+" : ""}${money(entry.amount)}</td>
+      <td>${entry.relatedTenantId ? escapeHtml(tenantName(entry.relatedTenantId)) : "-"}</td>
+      <td>${escapeHtml(entry.note || "-")}</td>
+    </tr>`).join("");
+    return `<div class="table-wrap"><table>
+      <thead><tr><th>时间</th><th>类型</th><th>数量</th><th>相关系统</th><th>说明</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="5" class="empty slim">暂无智慧星币记录</td></tr>`}</tbody>
+    </table></div>`;
+  }
+
+  function starCoinBalance(tenantId) {
+    return Number((state.starCoinLedger || [])
+      .filter((entry) => entry.tenantId === tenantId)
+      .reduce((sum, entry) => sum + Number(entry.amount || 0), 0)
+      .toFixed(6));
+  }
+
+  function renderReferralApplicationsAdmin() {
+    const applications = (state.referralApplications || []).slice().sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+    const rows = applications.map((application) => {
+      const pending = application.status === "pending";
+      return `<tr>
+        <td>${formatDate(application.createdAt)}</td>
+        <td><strong>${escapeHtml(application.name)}</strong><br><span class="muted">${escapeHtml(application.contact || "-")}</span></td>
+        <td>${escapeHtml(application.supervisorName)}<br><span class="muted">${escapeHtml(application.supervisorLoginName)}</span></td>
+        <td>${escapeHtml(tenantName(application.referrerTenantId))}</td>
+        <td>${badge(referralApplicationStatusMap(), application.status)}</td>
+        <td>${escapeHtml(application.note || "-")}</td>
+        <td>${pending ? `<button class="btn small primary" data-referral-approve="${application.id}">通过开通</button>` : escapeHtml(tenantName(application.tenantId))}</td>
+      </tr>`;
+    }).join("");
+    return `<div class="table-wrap"><table>
+      <thead><tr><th>申请时间</th><th>申请系统</th><th>主管账号</th><th>推荐人</th><th>状态</th><th>备注</th><th>操作</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="7" class="empty slim">暂无开户注册申请</td></tr>`}</tbody>
+    </table></div>`;
+  }
+
+  function renderStarCoinLedgerAdmin() {
+    const rows = (state.starCoinLedger || []).slice().sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt)).map((entry) => `<tr>
+      <td>${formatDate(entry.createdAt)}</td>
+      <td>${escapeHtml(tenantName(entry.tenantId))}</td>
+      <td>${badge(starCoinTypeMap(), entry.type)}</td>
+      <td class="${Number(entry.amount) >= 0 ? "amount-income" : "amount-expense"}">${Number(entry.amount) >= 0 ? "+" : ""}${money(entry.amount)}</td>
+      <td>${entry.relatedTenantId ? escapeHtml(tenantName(entry.relatedTenantId)) : "-"}</td>
+      <td>${escapeHtml(entry.note || "-")}</td>
+    </tr>`).join("");
+    return `<div class="table-wrap"><table>
+      <thead><tr><th>时间</th><th>系统</th><th>类型</th><th>数量</th><th>相关系统</th><th>说明</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="6" class="empty slim">暂无智慧星币记录</td></tr>`}</tbody>
     </table></div>`;
   }
 
@@ -2550,7 +2728,17 @@
           "请确认交易已经成功上链并获得确认后再提交。",
           "如果提交后没有自动完成续费，请提交工单让平台处理。",
         ])}
-        ${helpSection("十、工单中心", [
+        ${!demoTenant && state.subscriptionSettings?.referralEnabled ? helpSection("十、推广有礼", [
+          "推广有礼用于把专属开户链接发给客户，客户通过链接提交申请。",
+          "客户提交申请后，不会马上自动开通；需要平台处理后才会交付账号。",
+          "客户第一次付费开通成功后，系统会给推荐人发放智慧星币。",
+          "智慧星币只能用于抵扣本系统租用续费，不能提现。",
+          "1 个智慧星币按 1 USDT 计算。",
+          "主管可在推广有礼页面查看余额、复制专属链接、查看邀请记录和智慧星币明细。",
+          "使用智慧星币续费时，只能按整月续费；系统会按当前正常月租计算需要多少智慧星币。",
+          "如果余额不足，不能提交智慧星币续费。",
+        ]) : ""}
+        ${helpSection("十一、工单中心", [
           "主管可通过工单中心向平台提交问题并查看处理进度。",
           "适合提交工单的情况包括租用续费提交后状态没有变化、钱包同步异常、链上流水长时间未同步、账号登录或登录密钥需要协助处理、系统功能使用中遇到异常。",
           "提交工单时建议写清楚问题发生时间、涉及的钱包或交易哈希、已经尝试过的处理方式，以及希望平台协助确认或处理的事项。",
@@ -2559,17 +2747,17 @@
           "待租户回复超过 3 天未回复时，工单列表会显示提醒；第 4 天仍未回复会自动关闭，关闭后可通过回复自动重新打开。",
           "已关闭工单仍可继续回复，提交回复后会自动重新打开并转为待对方回复。",
         ])}
-        ${helpSection("十一、链上查询", [
+        ${helpSection("十二、链上查询", [
           "链上查询用于手动核查交易哈希或钱包地址。",
           "可查询某笔交易是否已同步到系统，并核对交易哈希、链上时间、方向、金额和对方地址。",
           "链上查询只是查询工具，不等同于批注、平账或审核。",
         ])}
-        ${helpSection("十二、操作日志", [
+        ${helpSection("十三、操作日志", [
           "操作日志用于追踪系统内的重要业务和管理操作，包括提交批注、审核通过或驳回、修正、取消入账、往来款提交、审核、平账、钱包变更、权限变更、续费处理和工单处理等。",
           "主管可以查看本系统和业务有关的日志，用来追踪谁提交、谁审核、谁调整、谁改了钱包或权限。",
           "员工只能查看与自己相关的日志。",
         ])}
-        ${helpSection("十三、日常建议", [
+        ${helpSection("十四、日常建议", [
           "收付款发生后，应尽快处理对应链上流水批注。",
           "批注备注尽量写清楚客户、业务和用途，避免日后追溯困难。",
           "凭证图片建议保留关键交易信息、客户信息或业务凭据。",
@@ -2869,6 +3057,8 @@
     document.querySelectorAll("[data-rps-revoke]").forEach((button) => button.addEventListener("click", () => revokeReceivableSettlement(button.dataset.rpsRevoke)));
     document.querySelectorAll("[data-manual-renew]").forEach((button) => button.addEventListener("click", () => manualRenewPayment(button.dataset.manualRenew)));
     document.querySelectorAll("[data-tenant-manual-renew]").forEach((button) => button.addEventListener("click", () => manualRenewTenant(button.dataset.tenantManualRenew)));
+    document.querySelectorAll("[data-referral-approve]").forEach((button) => button.addEventListener("click", () => approveReferralApplication(button.dataset.referralApprove)));
+    document.querySelector("[data-action='redeem-star-coins']")?.addEventListener("click", redeemStarCoins);
     document.querySelector("#categoryForm")?.addEventListener("submit", submitCategory);
     document.querySelectorAll("[data-reset-totp]").forEach((button) => button.addEventListener("click", () => resetTotp(button.dataset.resetTotp)));
     document.querySelectorAll("[data-reset-password]").forEach((button) => button.addEventListener("click", () => resetPassword(button.dataset.resetPassword)));
@@ -2977,6 +3167,56 @@
 
   function bindLoginEvents() {
     document.querySelector("#loginForm")?.addEventListener("submit", login);
+  }
+
+  function bindInviteEvents() {
+    loadInviteInfo();
+    document.querySelector("#inviteApplicationForm")?.addEventListener("submit", submitReferralApplication);
+  }
+
+  async function loadInviteInfo() {
+    const code = inviteCodeFromPath();
+    const status = document.querySelector("[data-invite-status]");
+    const form = document.querySelector("#inviteApplicationForm");
+    if (!code || !status || !form) return;
+    try {
+      const response = await fetch(`/api/referrals/${encodeURIComponent(code)}`);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "推荐链接不可用");
+      form.hidden = false;
+      form.elements.referrerName.value = payload.invite?.referrerName || "";
+      status.className = "notice success";
+      status.textContent = `推荐人：${payload.invite?.referrerName || "-"}。请填写开户注册信息。`;
+    } catch (error) {
+      status.className = "notice danger";
+      status.textContent = error.message;
+    }
+  }
+
+  async function submitReferralApplication(event) {
+    event.preventDefault();
+    const form = event.target;
+    const data = Object.fromEntries(new FormData(form).entries());
+    if (!confirm("确认提交开户链接申请？提交后需等待平台管理员开通。")) return;
+    const submitButton = form.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+    try {
+      const response = await fetch("/api/referral-applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "提交失败");
+      form.reset();
+      form.hidden = true;
+      const status = document.querySelector("[data-invite-status]");
+      status.className = "notice success";
+      status.textContent = "申请已提交，请等待平台管理员开通并交付登录信息。";
+    } catch (error) {
+      submitButton.disabled = false;
+      toast(error.message);
+    }
   }
 
   async function loadAccounts() {
@@ -3744,6 +3984,8 @@
           platformWalletAddress: data.platformWalletAddress,
           enabled: data.enabled === "on",
           autoDisable: data.autoDisable === "on",
+          referralEnabled: data.referralEnabled === "on",
+          referralRewardCoins: Number(data.referralRewardCoins || 0),
         },
       });
       render();
@@ -4074,6 +4316,46 @@
         toast("租户已手工续费");
       },
     });
+  }
+
+  async function approveReferralApplication(applicationId) {
+    const application = (state.referralApplications || []).find((item) => item.id === applicationId);
+    if (!application) return;
+    if (!confirm(`确认通过「${application.name}」的开户注册申请，并创建主管账号「${application.supervisorLoginName}」？`)) return;
+    try {
+      const payload = await apiMutate(`/api/referral-applications/${encodeURIComponent(applicationId)}/approve`);
+      render();
+      toast("开户注册申请已通过");
+      if (payload.totpSetup) showTotpSetup(payload.totpSetup, {
+        password: payload.initialPassword || "申请时填写的初始密码",
+        loginUrl: location.origin,
+      });
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+
+  async function redeemStarCoins() {
+    const settings = state.subscriptionSettings || {};
+    const monthlyFee = Number(settings.monthlyFee || 0);
+    const balance = starCoinBalance(currentTenant().id);
+    const maxMonths = monthlyFee > 0 ? Math.floor((balance + 0.000001) / monthlyFee) : 0;
+    const raw = prompt(`使用智慧星币续费月数（当前余额 ${money(balance)}，月租 ${money(monthlyFee)}，最多 ${maxMonths} 个月）`, maxMonths > 0 ? "1" : "");
+    if (raw === null) return;
+    const months = Number(raw);
+    if (!Number.isInteger(months) || months <= 0) {
+      toast("请输入正整数月数");
+      return;
+    }
+    const need = months * monthlyFee;
+    if (!confirm(`确认使用 ${money(need)} 个智慧星币续费 ${months} 个月？`)) return;
+    try {
+      await apiMutate("/api/subscription/redeem-star-coins", { body: { months } });
+      render();
+      toast("智慧星币续费成功");
+    } catch (error) {
+      toast(error.message);
+    }
   }
 
   function openSubscriptionRenewModal({ title, desc, fixedTenantId = "", defaultReason = "", includeAmount = false, payment = null, onSubmit }) {
@@ -4540,6 +4822,8 @@
     state.auditLogs ||= [];
     state.walletBalanceSnapshots ||= [];
     state.platformPayments ||= [];
+    state.referralApplications ||= [];
+    state.starCoinLedger ||= [];
     state.receivablePayables ||= [];
     state.receivableSettlements ||= [];
     state.receivableSettlements.forEach((settlement) => {
@@ -4553,6 +4837,8 @@
     state.subscriptionSettings.platformWalletAddress ||= "";
     state.subscriptionSettings.enabled = state.subscriptionSettings.enabled === true;
     state.subscriptionSettings.autoDisable = state.subscriptionSettings.autoDisable !== false;
+    state.subscriptionSettings.referralEnabled = state.subscriptionSettings.referralEnabled === true;
+    state.subscriptionSettings.referralRewardCoins = Number(state.subscriptionSettings.referralRewardCoins || 0);
     state.systemSettings ||= { walletEnabledLimit: 0 };
     state.systemSettings.walletEnabledLimit = Number.isInteger(Number(state.systemSettings.walletEnabledLimit)) && Number(state.systemSettings.walletEnabledLimit) >= 0
       ? Number(state.systemSettings.walletEnabledLimit)

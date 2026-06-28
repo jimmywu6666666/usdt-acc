@@ -11,11 +11,13 @@ import {
   assertAdmin,
   assertSupervisorOrAdmin,
   autoCloseStaleSupportTickets,
+  approveReferralApplication,
   claimDemoAccount,
   createCategory,
   createDemoAccount,
   createEmployee,
   createAnnotation,
+  createReferralApplication,
   createReceivablePayable,
   createReceivableSettlement,
   createSupportTicket,
@@ -29,6 +31,7 @@ import {
   getReceivableAttachment,
   getSupportTicketAttachment,
   getAuditLogsForUser,
+  getReferralInvite,
   getTransactionDetail,
   manualRenewSubscriptionPayment,
   manualRenewTenantSubscription,
@@ -43,6 +46,7 @@ import {
   resetUserTotp,
   resetDemoTenantData,
   resetStaleDemoTenants,
+  redeemStarCoinsForSubscription,
   reviewAnnotation,
   reviewReceivablePayable,
   reviewReceivableSettlement,
@@ -160,6 +164,27 @@ async function handleApi(req, res, pathname) {
 
   if (pathname === "/api/app-version" && req.method === "GET") {
     respond(200, { version: await getAppVersion() });
+    return;
+  }
+
+  const referralInvite = pathname.match(/^\/api\/referrals\/([^/]+)$/);
+  if (referralInvite && req.method === "GET") {
+    const state = await storage.readState();
+    if (!state) throw Object.assign(new Error("系统状态尚未初始化"), { statusCode: 404 });
+    const invite = getReferralInvite(state, { code: referralInvite[1] });
+    respond(200, { ok: true, invite });
+    return;
+  }
+
+  if (pathname === "/api/referral-applications" && req.method === "POST") {
+    const body = await readJsonBody(req);
+    let application = null;
+    await storage.mutateState(async (current) => {
+      if (!current) throw Object.assign(new Error("系统状态尚未初始化"), { statusCode: 404 });
+      application = createReferralApplication(current, { input: body });
+      return current;
+    });
+    respond(200, { ok: true, application });
     return;
   }
 
@@ -605,6 +630,29 @@ async function handleApi(req, res, pathname) {
     return;
   }
 
+  if (pathname === "/api/subscription/redeem-star-coins" && req.method === "POST") {
+    const body = await readJsonBody(req);
+    const state = await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      redeemStarCoinsForSubscription(current, { user, months: body.months });
+      return current;
+    });
+    respond(200, { ok: true, state });
+    return;
+  }
+
+  const referralApplicationApprove = pathname.match(/^\/api\/referral-applications\/([^/]+)\/approve$/);
+  if (referralApplicationApprove && req.method === "POST") {
+    let created = null;
+    const state = await storage.mutateState(async (current) => {
+      const { user } = await authenticate(current);
+      created = approveReferralApplication(current, { user, applicationId: referralApplicationApprove[1] });
+      return current;
+    });
+    respond(200, { ok: true, state, totpSetup: totpSetupForUser(created?.supervisor), initialPassword: created?.initialPassword || "" });
+    return;
+  }
+
   if (pathname === "/api/wallets" && req.method === "POST") {
     const body = await readJsonBody(req);
     const state = await storage.mutateState(async (current) => {
@@ -1016,7 +1064,13 @@ function normalizeLoginName(value) {
 
 async function serveStatic(req, res, pathname) {
   const decodedPath = decodeURIComponent(pathname);
-  const safePath = pathname === "/" ? "/index.html" : decodedPath === "/demo" ? "/demo.html" : decodedPath;
+  const safePath = pathname === "/"
+    ? "/index.html"
+    : decodedPath.startsWith("/invite/")
+      ? "/index.html"
+    : decodedPath === "/demo" || decodedPath === "/demo/"
+      ? "/demo.html"
+      : decodedPath;
   if (!["/index.html", "/demo.html"].includes(safePath) && !safePath.startsWith("/assets/")) {
     res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
     res.end("Not Found");
