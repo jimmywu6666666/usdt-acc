@@ -917,7 +917,7 @@
     if (["admin", "supervisor"].includes(role)) nav.splice(2, 0, ["review", "审核中心"]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["users", "账号管理"]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["subscription", role === "admin" ? "租用管理" : "租用续费"]);
-    if (role === "supervisor" && !currentTenant()?.demo && state.subscriptionSettings?.referralEnabled) nav.splice(-1, 0, ["referral", "推广有礼"]);
+    if ((role === "admin" || (role === "supervisor" && state.subscriptionSettings?.referralEnabled)) && !currentTenant()?.demo) nav.splice(-1, 0, ["referral", "推广有礼"]);
     if (["admin", "supervisor"].includes(role)) nav.splice(-1, 0, ["tickets", "工单中心"]);
     if (role === "admin") nav.splice(-1, 0, ["admin", "系统管理"]);
     if (role === "admin") nav.splice(-1, 0, ["server", "服务器管理"]);
@@ -933,7 +933,7 @@
     if (state.activeView === "admin" && role !== "admin") state.activeView = "dashboard";
     if (state.activeView === "server" && role !== "admin") state.activeView = "dashboard";
     if (state.activeView === "subscription" && !["admin", "supervisor"].includes(role)) state.activeView = "dashboard";
-    if (state.activeView === "referral" && (role !== "supervisor" || currentTenant()?.demo || !state.subscriptionSettings?.referralEnabled)) state.activeView = "dashboard";
+    if (state.activeView === "referral" && (!["admin", "supervisor"].includes(role) || currentTenant()?.demo || (role === "supervisor" && !state.subscriptionSettings?.referralEnabled))) state.activeView = "dashboard";
     if (state.activeView === "tickets" && !["admin", "supervisor"].includes(role)) state.activeView = "dashboard";
     const views = {
       dashboard: renderDashboard,
@@ -2034,20 +2034,23 @@
   function renderReferral() {
     const tenant = currentTenant();
     const settings = state.subscriptionSettings || {};
-    if (!settings.referralEnabled || tenant.demo) return `<div class="panel empty">推广有礼暂未开启</div>`;
+    if (tenant.demo) return `<div class="panel empty">演示账号不参与推广有礼</div>`;
+    if (!settings.referralEnabled && currentUser().role !== "admin") return `<div class="panel empty">推广有礼暂未开启</div>`;
     const balance = starCoinBalance(tenant.id);
     const monthlyFee = Number(settings.monthlyFee || 0);
     const inviteUrl = `${location.origin}/invite/${tenant.referralCode || ""}`;
     const applications = (state.referralApplications || []).filter((item) => item.referrerTenantId === tenant.id);
     const ledger = (state.starCoinLedger || []).filter((item) => item.tenantId === tenant.id);
+    const canRedeem = currentUser().role === "supervisor" && settings.referralEnabled;
     return `
-      ${pageHead("推广有礼", "邀请新客户开通系统，首次付费开通后获得智慧星币")}
+      ${pageHead("推广有礼", currentUser().role === "admin" ? `查看「${tenant.name}」的推广链接、智慧星币和邀请记录` : "邀请新客户开通系统，首次付费开通后获得智慧星币")}
+      ${!settings.referralEnabled ? `<div class="notice chain-status-off">推广有礼暂未开启。管理员可在“租用管理”的收费设置中启用。</div>` : ""}
       <section class="grid two-col">
         <div class="panel referral-summary-card">
           <div class="panel-title"><h3>智慧星币余额</h3><span>1 智慧星币 = 1 USDT</span></div>
           <div class="metric-main">${money(balance)}</div>
           <p class="muted">当前月租 ${money(monthlyFee)} USDT，可按整月抵扣续费。</p>
-          <button class="btn primary" data-action="redeem-star-coins" ${balance + 0.000001 < monthlyFee ? "disabled" : ""}>使用智慧星币续费</button>
+          ${canRedeem ? `<button class="btn primary" data-action="redeem-star-coins" ${balance + 0.000001 < monthlyFee ? "disabled" : ""}>使用智慧星币续费</button>` : `<p class="muted">管理员账号仅查看；智慧星币续费由租户主管在本页面操作。</p>`}
         </div>
         <div class="panel">
           <div class="panel-title"><h3>专属推荐链接</h3><span>发送给客户填写开通申请</span></div>
