@@ -1720,12 +1720,12 @@
         ${renderTenantManagement()}
       </section>
       <section class="panel">
-        <div class="panel-title"><h3>智慧星币记录</h3><span>邀请奖励和抵扣续费都会留痕</span></div>
-        ${renderStarCoinLedgerAdmin()}
-      </section>
-      <section class="panel">
         <div class="panel-title"><h3>平台收入列表</h3><span>查看租户提交哈希后的付款处理结果</span></div>
         ${renderPlatformPayments()}
+      </section>
+      <section class="panel">
+        <div class="panel-title"><h3>智慧星币记录</h3><span>邀请奖励和抵扣续费都会留痕</span></div>
+        ${renderStarCoinLedgerAdmin()}
       </section>
     `;
   }
