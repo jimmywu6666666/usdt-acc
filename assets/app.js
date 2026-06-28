@@ -2091,6 +2091,14 @@
   function renderReferralPromotionTools({ inviteUrl, demoUrl }) {
     const adUrl = `/ad?invite=${encodeURIComponent(inviteUrl)}`;
     return `<section class="grid two-col referral-tools-row">
+      <div class="panel referral-demo-card">
+        <div class="panel-title"><h3>演示地址</h3><span>发送给客户先体验系统</span></div>
+        <div class="copy-box">
+          <strong>${escapeHtml(demoUrl)}</strong>
+          <button class="btn small" data-copy-text="${escapeHtml(demoUrl)}">复制地址</button>
+        </div>
+        <p class="muted">客户可先领取演示账号体验现金流台账、批注审核、往来款和平账等核心功能。</p>
+      </div>
       <div class="panel referral-materials">
         <div class="referral-material-entry">
           <div>
@@ -2100,14 +2108,6 @@
           </div>
           <a class="btn primary" href="${escapeHtml(adUrl)}" target="_blank" rel="noopener">打开素材库</a>
         </div>
-      </div>
-      <div class="panel referral-demo-card">
-        <div class="panel-title"><h3>演示地址</h3><span>发送给客户先体验系统</span></div>
-        <div class="copy-box">
-          <strong>${escapeHtml(demoUrl)}</strong>
-          <button class="btn small" data-copy-text="${escapeHtml(demoUrl)}">复制地址</button>
-        </div>
-        <p class="muted">客户可先领取演示账号体验现金流台账、批注审核、往来款和平账等核心功能。</p>
       </div>
     </section>`;
   }
