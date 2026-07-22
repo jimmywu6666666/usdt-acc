@@ -278,9 +278,17 @@
   }
 
   function writeStoredState() {
+    if (session?.token && runtimeConfig.productionMode) {
+      localStorage.removeItem(STORE_KEY);
+      return;
+    }
     const snapshot = { ...state };
     delete snapshot.chainStatus;
-    localStorage.setItem(STORE_KEY, JSON.stringify(snapshot));
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(snapshot));
+    } catch {
+      localStorage.removeItem(STORE_KEY);
+    }
   }
 
   function readUiState() {
@@ -293,10 +301,14 @@
 
   function saveUiState() {
     if (!session?.token) return;
-    localStorage.setItem(UI_STATE_KEY, JSON.stringify({
-      activeView: state.activeView,
-      activeTenantId: state.activeTenantId,
-    }));
+    try {
+      localStorage.setItem(UI_STATE_KEY, JSON.stringify({
+        activeView: state.activeView,
+        activeTenantId: state.activeTenantId,
+      }));
+    } catch {
+      localStorage.removeItem(UI_STATE_KEY);
+    }
   }
 
   function restoreUiState() {
